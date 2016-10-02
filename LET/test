@@ -1,0 +1,10 @@
+let a = 5 in
+  let b = 6 in
+    -(b, -(a, 10));
+-(123, 44);
+is_zero(0);
+is_zero(1);
+let a = 5 in
+  if is_zero(a) then 5 else 4;
+let a = -(5, 5) in
+  if is_zero(a) then 5 else 4;

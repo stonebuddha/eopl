@@ -1,5 +1,8 @@
 type program =
-  | AProgram of expression
+  | AProgram of top_level list
+
+and top_level =
+  | ExpTop of expression
 
 and expression =
   | ConstExp of int * Ploc.t

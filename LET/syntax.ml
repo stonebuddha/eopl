@@ -1,5 +1,8 @@
 type program =
-  | AProgram of expression
+  | AProgram of top_level list
+
+and top_level =
+  | ExpTop of expression
 
 and expression =
   | ConstExp of int * Ploc.t
@@ -12,13 +15,17 @@ and expression =
 let g = Grammar.gcreate (Plexer.gmake ())
 
 let p = Grammar.Entry.create g "program"
+let t = Grammar.Entry.create g "top level"
 let e = Grammar.Entry.create g "expression"
 
 let parse = Grammar.Entry.parse p
 
 EXTEND
   p : [
-    [ exp1 = e -> AProgram exp1 ]
+    [ tops = LIST0 t -> AProgram tops ]
+  ];
+  t : [
+    [ exp1 = e; ";" -> ExpTop exp1 ]
   ];
   e : [
     [ num = INT -> ConstExp (int_of_string num, loc)
