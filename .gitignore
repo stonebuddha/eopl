@@ -4,3 +4,6 @@
 tags
 
 *.exe
+
+*.vo
+*.glob
