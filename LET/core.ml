@@ -6,7 +6,6 @@ and expval =
   | NumVal of int
   | BoolVal of bool
 
-
 let string_of_expval eval =
   match eval with
   | NumVal num -> string_of_int num
