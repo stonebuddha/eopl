@@ -112,6 +112,7 @@ let rec value_of exp env =
      | ListVal list1 -> BoolVal (List.length list1 = 0)
      | _ -> raise (Interpreter_error ("the operand of is_null should be a list", loc)))
   | EmptylistExp loc -> ListVal []
+  | ListExp (exps, loc) -> ListVal (List.map (fun exp1 -> value_of exp1 env) exps)
 
 let value_of_top_level (ExpTop exp1) =
   value_of exp1 (empty_env ()) |> string_of_expval |> print_endline

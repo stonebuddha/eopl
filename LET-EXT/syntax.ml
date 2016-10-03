@@ -23,6 +23,7 @@ and expression =
   | CdrExp of expression * Ploc.t
   | IsNullExp of expression * Ploc.t
   | EmptylistExp of Ploc.t
+  | ListExp of expression list * Ploc.t
 
 let g = Grammar.gcreate (Plexer.gmake ())
 
@@ -57,6 +58,7 @@ EXTEND
     | "car"; "("; exp1 = e; ")" -> CarExp (exp1, loc)
     | "cdr"; "("; exp1 = e; ")" -> CdrExp (exp1, loc)
     | "is_null"; "("; exp1 = e; ")" -> IsNullExp (exp1, loc)
-    | "emptylist" -> EmptylistExp loc ]
+    | "emptylist" -> EmptylistExp loc
+    | "list"; "("; exps = LIST0 e SEP ","; ")" -> ListExp (exps, loc) ]
   ];
 END

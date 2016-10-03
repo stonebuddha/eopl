@@ -23,5 +23,6 @@ and expression =
   | CdrExp of expression * Ploc.t
   | IsNullExp of expression * Ploc.t
   | EmptylistExp of Ploc.t
+  | ListExp of expression list * Ploc.t
 
 val parse : char Stream.t -> program

@@ -22,3 +22,8 @@ is_less(1, 2);
 is_less(1, 1);
 let x = 4 in
   cons(x, cons(cons(-(x, 1), emptylist), emptylist));
+car(cons(1, cons(is_zero(1), cons(3, emptylist))));
+cdr(cons(1, cons(is_zero(1), cons(3, emptylist))));
+is_null(emptylist);
+is_null(cons(1, emptylist));
+let x = 4 in list(x, -(x, 1), -(x, 3));
