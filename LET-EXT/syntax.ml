@@ -15,6 +15,9 @@ and expression =
   | AddExp of expression * expression * Ploc.t
   | MultExp of expression * expression * Ploc.t
   | QuotExp of expression * expression * Ploc.t
+  | IsEqualExp of expression * expression * Ploc.t
+  | IsGreaterExp of expression * expression * Ploc.t
+  | IsLessExp of expression * expression * Ploc.t
 
 let g = Grammar.gcreate (Plexer.gmake ())
 
@@ -41,6 +44,9 @@ EXTEND
     | "minus"; "("; exp1 = e; ")" -> MinusExp (exp1, loc)
     | "+"; "("; exp1 = e; ","; exp2 = e; ")" -> AddExp (exp1, exp2, loc)
     | "*"; "("; exp1 = e; ","; exp2 = e; ")" -> MultExp (exp1, exp2, loc)
-    | "quot"; "("; exp1 = e; ","; exp2 = e; ")" -> QuotExp (exp1, exp2, loc) ]  
+    | "quot"; "("; exp1 = e; ","; exp2 = e; ")" -> QuotExp (exp1, exp2, loc)
+    | "is_equal"; "("; exp1 = e; ","; exp2 = e; ")" -> IsEqualExp (exp1, exp2, loc)
+    | "is_greater"; "("; exp1 = e; ","; exp2 = e; ")" -> IsGreaterExp (exp1, exp2, loc)
+    | "is_less"; "("; exp1 = e; ","; exp2 = e; ")" -> IsLessExp (exp1, exp2, loc) ]
   ];
 END

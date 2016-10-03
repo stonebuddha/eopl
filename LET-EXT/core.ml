@@ -67,6 +67,24 @@ let rec value_of exp env =
     (match (eval1, eval2) with
      | (NumVal num1, NumVal num2) -> if num2 != 0 then NumVal (num1 / num2) else raise (Interpreter_error ("the second operand should be non-zero", loc))
      | _ -> raise (Interpreter_error ("the operands of quot should be numbers", loc)))
+  | IsEqualExp (exp1, exp2, loc) ->
+    let eval1 = value_of exp1 env in
+    let eval2 = value_of exp2 env in
+    (match (eval1, eval2) with
+     | (NumVal num1, NumVal num2) -> BoolVal (num1 = num2)
+     | _ -> raise (Interpreter_error ("the operands of is_equal should be numbers", loc)))
+  | IsGreaterExp (exp1, exp2, loc) ->
+    let eval1 = value_of exp1 env in
+    let eval2 = value_of exp2 env in
+    (match (eval1, eval2) with
+     | (NumVal num1, NumVal num2) -> BoolVal (num1 > num2)
+     | _ -> raise (Interpreter_error ("the operands of is_greater should be numbers", loc)))
+  | IsLessExp (exp1, exp2, loc) ->
+    let eval1 = value_of exp1 env in
+    let eval2 = value_of exp2 env in
+    (match (eval1, eval2) with
+     | (NumVal num1, NumVal num2) -> BoolVal (num1 < num2)
+     | _ -> raise (Interpreter_error ("the operands of is_less should be numbers", loc)))
 
 let value_of_top_level (ExpTop exp1) =
   value_of exp1 (empty_env ()) |> string_of_expval |> print_endline
