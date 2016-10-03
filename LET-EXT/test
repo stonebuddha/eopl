@@ -20,3 +20,5 @@ is_greater(2, 1);
 is_greater(2, 2);
 is_less(1, 2);
 is_less(1, 1);
+let x = 4 in
+  cons(x, cons(cons(-(x, 1), emptylist), emptylist));

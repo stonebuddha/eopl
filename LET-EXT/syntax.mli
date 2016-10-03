@@ -18,5 +18,10 @@ and expression =
   | IsEqualExp of expression * expression * Ploc.t
   | IsGreaterExp of expression * expression * Ploc.t
   | IsLessExp of expression * expression * Ploc.t
+  | ConsExp of expression * expression * Ploc.t
+  | CarExp of expression * Ploc.t
+  | CdrExp of expression * Ploc.t
+  | IsNullExp of expression * Ploc.t
+  | EmptylistExp of Ploc.t
 
 val parse : char Stream.t -> program

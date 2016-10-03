@@ -5,11 +5,16 @@ type environment = (string * expval) list
 and expval =
   | NumVal of int
   | BoolVal of bool
+  | ListVal of expval list
 
-let string_of_expval eval =
+let rec string_of_expval eval =
   match eval with
   | NumVal num -> string_of_int num
   | BoolVal bool -> string_of_bool bool
+  | ListVal evals ->
+    match evals with
+    | [] -> "()"
+    | hd :: tl -> "(" ^ (List.fold_left (fun acc eval -> acc ^ " " ^ string_of_expval eval) (string_of_expval hd) tl) ^ ")"
 
 let empty_env () = []
 
@@ -85,6 +90,28 @@ let rec value_of exp env =
     (match (eval1, eval2) with
      | (NumVal num1, NumVal num2) -> BoolVal (num1 < num2)
      | _ -> raise (Interpreter_error ("the operands of is_less should be numbers", loc)))
+  | ConsExp (exp1, exp2, loc) ->
+    let eval1 = value_of exp1 env in
+    let eval2 = value_of exp2 env in
+    (match eval2 with
+     | ListVal list2 -> ListVal (eval1 :: list2)
+     | _ -> raise (Interpreter_error ("the second operand of cons should be a list", loc)))
+  | CarExp (exp1, loc) ->
+    let eval1 = value_of exp1 env in
+    (match eval1 with
+     | ListVal list1 -> if List.length list1 > 0 then List.hd list1 else raise (Interpreter_error ("the operand of car should be non-empty", loc))
+     | _ -> raise (Interpreter_error ("the operand of car should be a list", loc)))
+  | CdrExp (exp1, loc) ->
+    let eval1 = value_of exp1 env in
+    (match eval1 with
+     | ListVal list1 -> if List.length list1 > 0 then ListVal (List.tl list1) else raise (Interpreter_error ("the operand of cdr should be non-empty", loc))
+     | _ -> raise (Interpreter_error ("the operand of cdr should be a list", loc)))
+  | IsNullExp (exp1, loc) ->
+    let eval1 = value_of exp1 env in
+    (match eval1 with
+     | ListVal list1 -> BoolVal (List.length list1 = 0)
+     | _ -> raise (Interpreter_error ("the operand of is_null should be a list", loc)))
+  | EmptylistExp loc -> ListVal []
 
 let value_of_top_level (ExpTop exp1) =
   value_of exp1 (empty_env ()) |> string_of_expval |> print_endline

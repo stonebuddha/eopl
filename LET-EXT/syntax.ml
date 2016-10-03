@@ -18,6 +18,11 @@ and expression =
   | IsEqualExp of expression * expression * Ploc.t
   | IsGreaterExp of expression * expression * Ploc.t
   | IsLessExp of expression * expression * Ploc.t
+  | ConsExp of expression * expression * Ploc.t
+  | CarExp of expression * Ploc.t
+  | CdrExp of expression * Ploc.t
+  | IsNullExp of expression * Ploc.t
+  | EmptylistExp of Ploc.t
 
 let g = Grammar.gcreate (Plexer.gmake ())
 
@@ -47,6 +52,11 @@ EXTEND
     | "quot"; "("; exp1 = e; ","; exp2 = e; ")" -> QuotExp (exp1, exp2, loc)
     | "is_equal"; "("; exp1 = e; ","; exp2 = e; ")" -> IsEqualExp (exp1, exp2, loc)
     | "is_greater"; "("; exp1 = e; ","; exp2 = e; ")" -> IsGreaterExp (exp1, exp2, loc)
-    | "is_less"; "("; exp1 = e; ","; exp2 = e; ")" -> IsLessExp (exp1, exp2, loc) ]
+    | "is_less"; "("; exp1 = e; ","; exp2 = e; ")" -> IsLessExp (exp1, exp2, loc)
+    | "cons"; "("; exp1 = e; ","; exp2 = e; ")" -> ConsExp (exp1, exp2, loc)
+    | "car"; "("; exp1 = e; ")" -> CarExp (exp1, loc)
+    | "cdr"; "("; exp1 = e; ")" -> CdrExp (exp1, loc)
+    | "is_null"; "("; exp1 = e; ")" -> IsNullExp (exp1, loc)
+    | "emptylist" -> EmptylistExp loc ]
   ];
 END
