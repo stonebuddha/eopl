@@ -10,3 +10,7 @@ let a = -(5, 5) in
   if is_zero(a) then 5 else 4;
 minus(5);
 minus(-(minus(5), 9));
++(2, 3);
+*(5, 6);
+quot(10, 3);
+quot(10, minus(2));

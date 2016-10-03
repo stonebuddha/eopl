@@ -49,6 +49,24 @@ let rec value_of exp env =
     (match eval1 with
      | NumVal num1 -> NumVal (- num1)
      | _ -> raise (Interpreter_error ("the operand of minus should be a number", loc)))
+  | AddExp (exp1, exp2, loc) ->
+    let eval1 = value_of exp1 env in
+    let eval2 = value_of exp2 env in
+    (match (eval1, eval2) with
+     | (NumVal num1, NumVal num2) -> NumVal (num1 + num2)
+     | _ -> raise (Interpreter_error ("the operands of add should be numbers", loc)))
+  | MultExp (exp1, exp2, loc) ->
+    let eval1 = value_of exp1 env in
+    let eval2 = value_of exp2 env in
+    (match (eval1, eval2) with
+     | (NumVal num1, NumVal num2) -> NumVal (num1 * num2)
+     | _ -> raise (Interpreter_error ("the operands of mult should be numbers", loc)))
+  | QuotExp (exp1, exp2, loc) ->
+    let eval1 = value_of exp1 env in
+    let eval2 = value_of exp2 env in
+    (match (eval1, eval2) with
+     | (NumVal num1, NumVal num2) -> if num2 != 0 then NumVal (num1 / num2) else raise (Interpreter_error ("the second operand should be non-zero", loc))
+     | _ -> raise (Interpreter_error ("the operands of quot should be numbers", loc)))
 
 let value_of_top_level (ExpTop exp1) =
   value_of exp1 (empty_env ()) |> string_of_expval |> print_endline
