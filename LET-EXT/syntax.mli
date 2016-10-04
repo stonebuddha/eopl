@@ -13,6 +13,7 @@ and expression =
   | LetExp of string * expression * expression * Ploc.t
   | EmptylistExp of Ploc.t
   | ListExp of expression list * Ploc.t
+  | CondExp of (expression * expression) list * Ploc.t
 
 and bin_op =
   | Diff

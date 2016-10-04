@@ -13,6 +13,7 @@ and expression =
   | LetExp of string * expression * expression * Ploc.t
   | EmptylistExp of Ploc.t
   | ListExp of expression list * Ploc.t
+  | CondExp of (expression * expression) list * Ploc.t
 
 and bin_op =
   | Diff
@@ -36,6 +37,7 @@ let g = Grammar.gcreate (Plexer.gmake ())
 let p = Grammar.Entry.create g "program"
 let t = Grammar.Entry.create g "top level"
 let e = Grammar.Entry.create g "expression"
+let c = Grammar.Entry.create g "conditional clause"
 let b = Grammar.Entry.create g "binary operator"
 let u = Grammar.Entry.create g "unary operator"
 
@@ -56,7 +58,11 @@ EXTEND
     | var = LIDENT -> VarExp (var, loc)
     | "let"; var = LIDENT; "="; exp1 = e; "in"; body = e -> LetExp (var, exp1, body, loc)
     | "emptylist" -> EmptylistExp loc
-    | "list"; "("; exps = LIST0 e SEP ","; ")" -> ListExp (exps, loc) ]
+    | "list"; "("; exps = LIST0 e SEP ","; ")" -> ListExp (exps, loc)
+    | "cond"; clauses = LIST0 c; "end" -> CondExp (clauses, loc) ]
+  ];
+  c : [
+    [ exp1 = e; "==>"; exp2 = e -> (exp1, exp2) ]
   ];
   b : [
     [ "-" -> Diff

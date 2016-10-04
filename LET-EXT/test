@@ -27,3 +27,5 @@ cdr(cons(1, cons(is_zero(1), cons(3, emptylist))));
 is_null(emptylist);
 is_null(cons(1, emptylist));
 let x = 4 in list(x, -(x, 1), -(x, 3));
+cond is_zero(0) ==> 1 is_zero(1) ==> 2 end;
+cond is_zero(1) ==> 1 is_zero(0) ==> 2 end;

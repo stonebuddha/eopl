@@ -99,6 +99,17 @@ let rec value_of exp env =
     value_of body (extend_env var eval1 env)
   | EmptylistExp loc -> ListVal []
   | ListExp (exps, loc) -> ListVal (List.map (fun exp1 -> value_of exp1 env) exps)
+  | CondExp (clauses, loc) ->
+    let rec inner clauses =
+      (match clauses with
+       | [] -> raise (Interpreter_error ("none of the conditional clauses evaluates to true", loc))
+       | (exp1, exp2) :: tl ->
+         let eval1 = value_of exp1 env in
+         (match eval1 with
+          | BoolVal true -> value_of exp2 env
+          | BoolVal false -> inner tl
+          | _ -> raise (Interpreter_error ("all clauses should have a boolean-valued condition", loc)))) in
+    inner clauses
 
 let value_of_top_level (ExpTop exp1) =
   value_of exp1 (empty_env ()) |> string_of_expval |> print_endline
