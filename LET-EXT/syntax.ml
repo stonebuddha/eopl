@@ -10,7 +10,7 @@ and expression =
   | UopExp of un_op * expression * Ploc.t
   | IfExp of expression * expression * expression * Ploc.t
   | VarExp of string * Ploc.t
-  | LetExp of string * expression * expression * Ploc.t
+  | LetExp of (string * expression) list * expression * Ploc.t
   | EmptylistExp of Ploc.t
   | ListExp of expression list * Ploc.t
   | CondExp of (expression * expression) list * Ploc.t
@@ -38,6 +38,7 @@ let g = Grammar.gcreate (Plexer.gmake ())
 let p = Grammar.Entry.create g "program"
 let t = Grammar.Entry.create g "top level"
 let e = Grammar.Entry.create g "expression"
+let l = Grammar.Entry.create g "let binding"
 let c = Grammar.Entry.create g "conditional clause"
 let b = Grammar.Entry.create g "binary operator"
 let u = Grammar.Entry.create g "unary operator"
@@ -57,11 +58,14 @@ EXTEND
     | uop = u; "("; exp1 = e; ")" -> UopExp (uop, exp1, loc)
     | "if"; exp1 = e; "then"; exp2 = e; "else"; exp3 = e -> IfExp (exp1, exp2, exp3, loc)
     | var = LIDENT -> VarExp (var, loc)
-    | "let"; var = LIDENT; "="; exp1 = e; "in"; body = e -> LetExp (var, exp1, body, loc)
+    | "let"; binds = LIST0 l; "in"; body = e -> LetExp (binds, body, loc)
     | "emptylist" -> EmptylistExp loc
     | "list"; "("; exps = LIST0 e SEP ","; ")" -> ListExp (exps, loc)
     | "cond"; clauses = LIST0 c; "end" -> CondExp (clauses, loc)
     | "print"; "("; exp1 = e; ")" -> PrintExp (exp1, loc) ]
+  ];
+  l : [
+    [ var = LIDENT; "="; exp1 = e -> (var, exp1) ]
   ];
   c : [
     [ exp1 = e; "==>"; exp2 = e -> (exp1, exp2) ]
