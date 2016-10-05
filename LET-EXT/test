@@ -29,3 +29,6 @@ is_null(cons(1, emptylist));
 let x = 4 in list(x, -(x, 1), -(x, 3));
 cond is_zero(0) ==> 1 is_zero(1) ==> 2 end;
 cond is_zero(1) ==> 1 is_zero(0) ==> 2 end;
+print(2333);
+print(is_zero(2333));
+print(list(1, 2, list(3, 4, 5)));

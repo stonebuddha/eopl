@@ -14,6 +14,7 @@ and expression =
   | EmptylistExp of Ploc.t
   | ListExp of expression list * Ploc.t
   | CondExp of (expression * expression) list * Ploc.t
+  | PrintExp of expression * Ploc.t
 
 and bin_op =
   | Diff

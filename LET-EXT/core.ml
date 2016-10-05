@@ -110,6 +110,9 @@ let rec value_of exp env =
           | BoolVal false -> inner tl
           | _ -> raise (Interpreter_error ("all clauses should have a boolean-valued condition", loc)))) in
     inner clauses
+  | PrintExp (exp1, loc) ->
+    let eval1 = value_of exp1 env in
+    print_endline (string_of_expval eval1); NumVal 1
 
 let value_of_top_level (ExpTop exp1) =
   value_of exp1 (empty_env ()) |> string_of_expval |> print_endline

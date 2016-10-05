@@ -14,6 +14,7 @@ and expression =
   | EmptylistExp of Ploc.t
   | ListExp of expression list * Ploc.t
   | CondExp of (expression * expression) list * Ploc.t
+  | PrintExp of expression * Ploc.t
 
 and bin_op =
   | Diff
@@ -59,7 +60,8 @@ EXTEND
     | "let"; var = LIDENT; "="; exp1 = e; "in"; body = e -> LetExp (var, exp1, body, loc)
     | "emptylist" -> EmptylistExp loc
     | "list"; "("; exps = LIST0 e SEP ","; ")" -> ListExp (exps, loc)
-    | "cond"; clauses = LIST0 c; "end" -> CondExp (clauses, loc) ]
+    | "cond"; clauses = LIST0 c; "end" -> CondExp (clauses, loc)
+    | "print"; "("; exp1 = e; ")" -> PrintExp (exp1, loc) ]
   ];
   c : [
     [ exp1 = e; "==>"; exp2 = e -> (exp1, exp2) ]
