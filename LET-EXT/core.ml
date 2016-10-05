@@ -116,6 +116,15 @@ let rec value_of exp env =
   | PrintExp (exp1, loc) ->
     let eval1 = value_of exp1 env in
     print_endline (string_of_expval eval1); NumVal 1
+  | UnpackExp (vars, exp1, body, loc) ->
+    let eval1 = value_of exp1 env in
+    (match eval1 with
+     | ListVal list1 ->
+       if List.length list1 = List.length vars then
+         value_of body (List.fold_left (fun new_env (var, eval) -> extend_env var eval new_env) env (List.combine vars list1))
+       else
+         raise (Interpreter_error ("the length of the evaluated list in unpack shoud be the same as the number of variables", loc))
+     | _ -> raise (Interpreter_error ("the evaluated value in unpack should be a list", loc)))
 
 let value_of_top_level (ExpTop exp1) =
   value_of exp1 (empty_env ()) |> string_of_expval |> print_endline

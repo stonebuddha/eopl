@@ -16,6 +16,7 @@ and expression =
   | ListExp of expression list * Ploc.t
   | CondExp of (expression * expression) list * Ploc.t
   | PrintExp of expression * Ploc.t
+  | UnpackExp of string list * expression * expression * Ploc.t
 
 and bin_op =
   | Diff

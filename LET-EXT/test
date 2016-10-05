@@ -34,3 +34,4 @@ print(is_zero(2333));
 print(list(1, 2, list(3, 4, 5)));
 let x = 30 in let x = -(x, 1) y = -(x, 2) in -(x, y);
 let x = 30 in let_seq x = -(x, 1) y = -(x, 2) in -(x, y);
+let u = 7 in unpack x y = cons(u, cons(3, emptylist)) in -(x, y);
