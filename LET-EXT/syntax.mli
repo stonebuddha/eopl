@@ -11,6 +11,7 @@ and expression =
   | IfExp of expression * expression * expression * Ploc.t
   | VarExp of string * Ploc.t
   | LetExp of (string * expression) list * expression * Ploc.t
+  | LetSeqExp of (string * expression) list * expression * Ploc.t
   | EmptylistExp of Ploc.t
   | ListExp of expression list * Ploc.t
   | CondExp of (expression * expression) list * Ploc.t

@@ -97,6 +97,9 @@ let rec value_of exp env =
   | LetExp (binds, body, loc) ->
     let iter new_env (var, exp1) = extend_env var (value_of exp1 env) new_env in
     value_of body (List.fold_left iter env binds)
+  | LetSeqExp (binds, body, loc) ->
+    let iter new_env (var, exp1) = extend_env var (value_of exp1 new_env) new_env in
+    value_of body (List.fold_left iter env binds)
   | EmptylistExp loc -> ListVal []
   | ListExp (exps, loc) -> ListVal (List.map (fun exp1 -> value_of exp1 env) exps)
   | CondExp (clauses, loc) ->

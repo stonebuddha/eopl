@@ -11,6 +11,7 @@ and expression =
   | IfExp of expression * expression * expression * Ploc.t
   | VarExp of string * Ploc.t
   | LetExp of (string * expression) list * expression * Ploc.t
+  | LetSeqExp of (string * expression) list * expression * Ploc.t
   | EmptylistExp of Ploc.t
   | ListExp of expression list * Ploc.t
   | CondExp of (expression * expression) list * Ploc.t
@@ -59,6 +60,7 @@ EXTEND
     | "if"; exp1 = e; "then"; exp2 = e; "else"; exp3 = e -> IfExp (exp1, exp2, exp3, loc)
     | var = LIDENT -> VarExp (var, loc)
     | "let"; binds = LIST0 l; "in"; body = e -> LetExp (binds, body, loc)
+    | "let_seq"; binds = LIST0 l; "in"; body = e -> LetSeqExp (binds, body, loc)
     | "emptylist" -> EmptylistExp loc
     | "list"; "("; exps = LIST0 e SEP ","; ")" -> ListExp (exps, loc)
     | "cond"; clauses = LIST0 c; "end" -> CondExp (clauses, loc)
