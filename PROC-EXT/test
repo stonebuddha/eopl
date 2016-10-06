@@ -57,3 +57,27 @@ in
         let odd = proc (x) ((makeodd makeodd makeeven) x) in
         let even = proc (x) ((makeeven makeodd makeeven) x) in
           (even 10);
+let makerec =
+  proc (f)
+    (proc (m) proc (x) ((f (m m)) x)
+     proc (m) proc (x) ((f (m m)) x))
+in
+  let maketimes4 = proc (f)
+                     proc (x)
+                       if is_zero(x)
+                       then 0
+                       else -((f -(x, 1)), -(0, 4))
+  in let times4 = (makerec maketimes4)
+     in (times4 3);
+let makerec =
+  proc (f)
+    (proc (m) (f proc (x) ((m m) x))
+     proc (m) (f proc (x) ((m m) x)))
+in
+  let maketimes4 = proc (f)
+                     proc (x)
+                       if is_zero(x)
+                       then 0
+                       else -((f -(x, 1)), -(0, 4))
+  in let times4 = (makerec maketimes4)
+     in (times4 3);
