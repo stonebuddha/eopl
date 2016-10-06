@@ -3,6 +3,8 @@ type program =
 
 and top_level =
   | ExpTop of expression
+  | ValTop of string * expression
+  | RecTop of string * string * expression
 
 and expression =
   | ConstExp of int * Ploc.t
@@ -28,7 +30,9 @@ EXTEND
     [ tops = LIST0 t -> AProgram tops ]
   ];
   t : [
-    [ exp1 = e; ";" -> ExpTop exp1 ]
+    [ exp1 = e; ";" -> ExpTop exp1
+    | "val"; var = LIDENT; "="; exp1 = e; ";" -> ValTop (var, exp1)
+    | "fun"; p_name = LIDENT; "("; b_var = LIDENT; ")"; "="; p_body = e; ";" -> RecTop (p_name, b_var, p_body) ]
   ];
   e : [
     [ num = INT -> ConstExp (int_of_string num, loc)

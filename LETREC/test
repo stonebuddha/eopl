@@ -13,3 +13,6 @@ let f = proc (x) -(x, 11) in (f (f 77));
 let x = 200 in let f = proc (z) -(z, x) in let x = 100 in let g = proc (z) -(z, x) in -((f 1), (g 1));
 letrec double (x) = if is_zero(x) then 0 else -((double -(x, 1)), -(0, 2))
 in (double 6);
+val minus_two = -(0, 2);
+fun double (x) = if is_zero(x) then 0 else -((double -(x, 1)), minus_two);
+(double -(10, minus_two));

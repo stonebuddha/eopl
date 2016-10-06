@@ -1,3 +1,4 @@
+open Support
 open Syntax
 
 type environment = bind list
@@ -77,7 +78,20 @@ and apply_procedure proc arg_val =
   match proc with
   | (var, body, saved_env) -> value_of body (extend_env (ValBind (var, arg_val)) saved_env)
 
-let value_of_top_level (ExpTop exp1) =
-  value_of exp1 (empty_env ()) |> string_of_expval |> print_endline
+let value_of_top_level top env =
+  match top with
+  | ExpTop exp1 ->
+    let eval1 = value_of exp1 env in
+    (eval1 |> string_of_expval |> prefix "val it = " |> suffix ";" |> print_endline);
+    extend_env (ValBind ("it", eval1)) env
+  | ValTop (var, exp1) ->
+    let eval1 = value_of exp1 env in
+    (eval1 |> string_of_expval |> prefix ("val " ^ var ^ " = ") |> suffix ";" |> print_endline);
+    extend_env (ValBind (var, eval1)) env
+  | RecTop (p_name, b_var, p_body) ->
+    let new_env = extend_env (RecBind (p_name, b_var, p_body)) env in
+    let proc_val = ProcVal (b_var, p_body, new_env) in
+    (proc_val |> string_of_expval |> prefix ("val " ^ p_name ^ " = ") |> suffix ";" |> print_endline);
+    new_env
 
-let value_of_program (AProgram tops) = List.iter value_of_top_level tops
+let value_of_program (AProgram tops) = List.fold_left (fun env top -> value_of_top_level top env) (empty_env ()) tops; ()

@@ -3,6 +3,8 @@ type program =
 
 and top_level =
   | ExpTop of expression
+  | ValTop of string * expression
+  | RecTop of string * string * expression
 
 and expression =
   | ConstExp of int * Ploc.t
