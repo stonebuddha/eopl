@@ -36,3 +36,24 @@ in let mult = proc (x, y) ((makemult makemult) x y)
             else (mult n ((maker maker) -(n, 1)))
       in let fac = proc (n) ((makefac makefac) n)
          in (fac 10);
+let true = is_zero(0)
+in
+  let false = is_zero(1)
+  in
+    let makeodd =
+      proc (makerodd, makereven)
+        proc (x)
+          if is_zero(x)
+          then false
+          else ((makereven makerodd makereven) -(x, 1))
+    in
+      let makeeven =
+        proc (makerodd, makereven)
+          proc (x)
+            if is_zero(x)
+            then true
+            else ((makerodd makerodd makereven) -(x, 1))
+      in
+        let odd = proc (x) ((makeodd makeodd makeeven) x) in
+        let even = proc (x) ((makeeven makeodd makeeven) x) in
+          (even 10);
