@@ -23,3 +23,7 @@ fun mult (x, y) =
   else -((mult -(x, 1) y), -(0, y));
 letrec fac (n, ret) = if is_zero(n) then (ret 1) else (fac -(n, 1) proc (ans) (ret (mult n ans)))
 in (fac 10 proc (ans) ans);
+letrec
+  even (x) = if is_zero(x) then 1 else (odd -(x, 1))
+  odd (x) = if is_zero(x) then 0 else (even -(x, 1))
+in (odd 13);

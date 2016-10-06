@@ -12,7 +12,7 @@ and proc = string list * expression * environment
 
 and bind =
   | ValBind of string * expval
-  | RecBind of string * string list * expression
+  | RecBind of (string * string list * expression) list
 
 let string_of_expval eval =
   match eval with
@@ -32,11 +32,11 @@ let rec apply_env env var =
       saved_val
     else
       apply_env saved_env var
-  | RecBind (p_name, b_vars, p_body) :: saved_env ->
-    if var = p_name then
+  | RecBind binds :: saved_env ->
+    try
+      let (p_name, b_vars, p_body) = List.find (fun (p_name, _, _) -> p_name = var) binds in
       ProcVal (b_vars, p_body, env)
-    else
-      apply_env saved_env var
+    with Not_found -> apply_env saved_env var
 
 exception Interpreter_error of string * Ploc.t
 
@@ -71,8 +71,8 @@ let rec value_of exp env =
     (match rator_val with
      | ProcVal proc -> let rand_vals = List.map (fun rand -> value_of rand env) rands in apply_procedure proc rand_vals loc
      | _ -> raise (Interpreter_error ("the operator of call shoud be a procedure", loc)))
-  | LetrecExp (p_name, b_vars, p_body, letrec_body, loc) ->
-    value_of letrec_body (extend_env (RecBind (p_name, b_vars, p_body)) env)
+  | LetrecExp (binds, letrec_body, loc) ->
+    value_of letrec_body (extend_env (RecBind binds) env)
 
 and apply_procedure proc arg_vals call_site =
   match proc with
@@ -93,7 +93,7 @@ let value_of_top_level top env =
     (eval1 |> string_of_expval |> prefix ("val " ^ var ^ " = ") |> suffix ";" |> print_endline);
     extend_env (ValBind (var, eval1)) env
   | RecTop (p_name, b_var, p_body) ->
-    let new_env = extend_env (RecBind (p_name, b_var, p_body)) env in
+    let new_env = extend_env (RecBind [(p_name, b_var, p_body)]) env in
     let proc_val = ProcVal (b_var, p_body, new_env) in
     (proc_val |> string_of_expval |> prefix ("val " ^ p_name ^ " = ") |> suffix ";" |> print_endline);
     new_env
