@@ -48,7 +48,10 @@ let rec value_of exp env =
   | LetExp (var, exp1, body, loc) ->
     let eval1 = value_of exp1 env in
     value_of body (extend_env var eval1 env)
-  | ProcExp (vars, body, loc) -> ProcVal (vars, body, env)
+  | ProcExp (vars, body, loc) ->
+    let fv = free_variables exp in
+    let saved_env = List.filter (fun (var, eval) -> List.mem var fv) env in
+    ProcVal (vars, body, saved_env)
   | CallExp (rator, rands, loc) ->
     let rator_val = value_of rator env in
     (match rator_val with

@@ -1,3 +1,5 @@
+open Support
+
 type program =
   | AProgram of top_level list
 
@@ -13,6 +15,17 @@ and expression =
   | LetExp of string * expression * expression * Ploc.t
   | ProcExp of string list * expression * Ploc.t
   | CallExp of expression * expression list * Ploc.t
+
+let rec free_variables exp =
+  match exp with
+  | ConstExp _ -> []
+  | DiffExp (exp1, exp2, _) -> set_union (=) (free_variables exp1) (free_variables exp2)
+  | IsZeroExp (exp1, _) -> free_variables exp1
+  | IfExp (exp1, exp2, exp3, _) -> set_union (=) (set_union (=) (free_variables exp1) (free_variables exp2)) (free_variables exp3)
+  | VarExp (var, _) -> [var]
+  | LetExp (var, exp1, body, _) -> set_union (=) (free_variables exp1) (set_minus (=) (free_variables body) [var])
+  | ProcExp (vars, body, _) -> set_minus (=) (free_variables body) vars
+  | CallExp (rator, rands, _) -> List.fold_left (set_union (=)) (free_variables rator) (List.map free_variables rands)
 
 let g = Grammar.gcreate (Plexer.gmake ())
 

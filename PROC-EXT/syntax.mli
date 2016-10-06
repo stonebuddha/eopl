@@ -14,4 +14,6 @@ and expression =
   | ProcExp of string list * expression * Ploc.t
   | CallExp of expression * expression list * Ploc.t
 
+val free_variables : expression -> string list
+
 val parse : char Stream.t -> program
