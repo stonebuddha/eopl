@@ -7,7 +7,7 @@ and expval =
   | BoolVal of bool
   | ProcVal of proc
 
-and proc = string * expression * environment
+and proc = string list * expression * environment
 
 let string_of_expval eval =
   match eval with
@@ -48,16 +48,20 @@ let rec value_of exp env =
   | LetExp (var, exp1, body, loc) ->
     let eval1 = value_of exp1 env in
     value_of body (extend_env var eval1 env)
-  | ProcExp (var, body, loc) -> ProcVal (var, body, env)
-  | CallExp (rator, rand, loc) ->
+  | ProcExp (vars, body, loc) -> ProcVal (vars, body, env)
+  | CallExp (rator, rands, loc) ->
     let rator_val = value_of rator env in
     (match rator_val with
-     | ProcVal proc -> let rand_val = value_of rand env in apply_procedure proc rand_val
+     | ProcVal proc -> let rand_vals = List.map (fun rand -> value_of rand env) rands in apply_procedure proc rand_vals loc
      | _ -> raise (Interpreter_error ("the operator of call shoud be a procedure", loc)))
 
-and apply_procedure proc arg_val =
+and apply_procedure proc arg_vals loc =
   match proc with
-  | (var, body, saved_env) -> value_of body (extend_env var arg_val saved_env)
+  | (vars, body, saved_env) ->
+    if List.length arg_vals = List.length vars then
+      value_of body (List.fold_left (fun new_env (var, arg_val) -> extend_env var arg_val new_env) saved_env (List.combine vars arg_vals))
+    else
+      raise (Interpreter_error ("the parameters and arguments are not consistent at call site", loc))
 
 let value_of_top_level (ExpTop exp1) =
   value_of exp1 (empty_env ()) |> string_of_expval |> print_endline

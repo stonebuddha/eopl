@@ -11,8 +11,8 @@ and expression =
   | IfExp of expression * expression * expression * Ploc.t
   | VarExp of string * Ploc.t
   | LetExp of string * expression * expression * Ploc.t
-  | ProcExp of string * expression * Ploc.t
-  | CallExp of expression * expression * Ploc.t
+  | ProcExp of string list * expression * Ploc.t
+  | CallExp of expression * expression list * Ploc.t
 
 let g = Grammar.gcreate (Plexer.gmake ())
 
@@ -36,7 +36,7 @@ EXTEND
     | "if"; exp1 = e; "then"; exp2 = e; "else"; exp3 = e -> IfExp (exp1, exp2, exp3, loc)
     | var = LIDENT -> VarExp (var, loc)
     | "let"; var = LIDENT; "="; exp1 = e; "in"; body = e -> LetExp (var, exp1, body, loc)
-    | "proc"; "("; var = LIDENT; ")"; body = e -> ProcExp (var, body, loc)
-    | "("; rator = e; rand = e; ")" -> CallExp (rator, rand, loc) ]
+    | "proc"; "("; vars = LIST0 LIDENT SEP ","; ")"; body = e -> ProcExp (vars, body, loc)
+    | "("; rator = e; rands = LIST0 e; ")" -> CallExp (rator, rands, loc) ]
   ];
 END
