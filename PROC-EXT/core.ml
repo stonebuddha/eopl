@@ -68,7 +68,7 @@ and apply_procedure proc arg_vals call_site =
       if traced then print_endline ("return to " ^ string_of_loc call_site ^ " from " ^ string_of_loc loc);
       ret
     else
-      raise (Interpreter_error ("the parameters and arguments are not consistent at call site", loc))
+      raise (Interpreter_error ("the parameters and arguments are not consistent at call site", call_site))
 
 let value_of_top_level (ExpTop exp1) =
   value_of exp1 (empty_env ()) |> string_of_expval |> print_endline
