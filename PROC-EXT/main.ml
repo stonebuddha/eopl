@@ -1,14 +1,6 @@
+open Support
 open Syntax
 open Core
-
-let string_of_loc loc =
-  let fp = Ploc.first_pos loc in
-  let lp = Ploc.last_pos loc in
-  let ln = Ploc.line_nb loc in
-  let lnl = Ploc.line_nb_last loc in
-  let bp = Ploc.bol_pos loc in
-  let bpl = Ploc.bol_pos_last loc in
-  string_of_int ln ^ "-" ^ string_of_int lnl ^ ":" ^ string_of_int (fp - bp + 1) ^ "-" ^ string_of_int (lp - bpl)
 
 let main () =
   try Stream.of_channel (open_in Sys.argv.(1)) |> parse |> value_of_program

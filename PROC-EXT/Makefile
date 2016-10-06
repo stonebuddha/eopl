@@ -9,8 +9,8 @@ support.cmo: support.cmi
 syntax.cmi:
 syntax.cmo: support.cmi syntax.cmi
 core.cmi: syntax.cmi
-core.cmo: syntax.cmi core.cmi
-main.cmo: syntax.cmi core.cmi
+core.cmo: support.cmi syntax.cmi core.cmi
+main.cmo: support.cmi syntax.cmi core.cmi
 
 %.cmi: %.mli
 	ocamlc -c -I `camlp5 -where` -pp 'camlp5o pa_extend.cmo' $<

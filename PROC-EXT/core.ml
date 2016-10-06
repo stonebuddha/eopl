@@ -1,3 +1,4 @@
+open Support
 open Syntax
 
 type environment = (string * expval) list
@@ -7,7 +8,7 @@ and expval =
   | BoolVal of bool
   | ProcVal of proc
 
-and proc = string list * expression * environment
+and proc = string list * expression * environment * bool * Ploc.t
 
 let string_of_expval eval =
   match eval with
@@ -48,21 +49,24 @@ let rec value_of exp env =
   | LetExp (var, exp1, body, loc) ->
     let eval1 = value_of exp1 env in
     value_of body (extend_env var eval1 env)
-  | ProcExp (vars, body, loc) ->
+  | ProcExp (vars, body, traced, loc) ->
     let fv = free_variables exp in
     let saved_env = List.filter (fun (var, eval) -> List.mem var fv) env in
-    ProcVal (vars, body, saved_env)
+    ProcVal (vars, body, saved_env, traced, loc)
   | CallExp (rator, rands, loc) ->
     let rator_val = value_of rator env in
     (match rator_val with
      | ProcVal proc -> let rand_vals = List.map (fun rand -> value_of rand env) rands in apply_procedure proc rand_vals loc
      | _ -> raise (Interpreter_error ("the operator of call shoud be a procedure", loc)))
 
-and apply_procedure proc arg_vals loc =
+and apply_procedure proc arg_vals call_site =
   match proc with
-  | (vars, body, saved_env) ->
+  | (vars, body, saved_env, traced, loc) ->
+    if traced then print_endline ("call from " ^ string_of_loc call_site ^ " to " ^ string_of_loc loc);
     if List.length arg_vals = List.length vars then
-      value_of body (List.fold_left (fun new_env (var, arg_val) -> extend_env var arg_val new_env) saved_env (List.combine vars arg_vals))
+      let ret = value_of body (List.fold_left (fun new_env (var, arg_val) -> extend_env var arg_val new_env) saved_env (List.combine vars arg_vals)) in
+      if traced then print_endline ("return to " ^ string_of_loc call_site ^ " from " ^ string_of_loc loc);
+      ret
     else
       raise (Interpreter_error ("the parameters and arguments are not consistent at call site", loc))
 

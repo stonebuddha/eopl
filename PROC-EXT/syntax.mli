@@ -11,7 +11,7 @@ and expression =
   | IfExp of expression * expression * expression * Ploc.t
   | VarExp of string * Ploc.t
   | LetExp of string * expression * expression * Ploc.t
-  | ProcExp of string list * expression * Ploc.t
+  | ProcExp of string list * expression * bool * Ploc.t
   | CallExp of expression * expression list * Ploc.t
 
 val free_variables : expression -> string list
