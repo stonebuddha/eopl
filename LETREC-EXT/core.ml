@@ -1,7 +1,7 @@
 open Support
 open Syntax
 
-type environment = bind list
+type environment = (string * bind) list
 
 and expval =
   | NumVal of int
@@ -11,8 +11,8 @@ and expval =
 and proc = string list * expression * environment
 
 and bind =
-  | ValBind of string * expval
-  | RecBind of (string * string list * expression) list
+  | ValBind of expval
+  | RecBind of expval ref
 
 let string_of_expval eval =
   match eval with
@@ -22,21 +22,13 @@ let string_of_expval eval =
 
 let empty_env () = []
 
-let extend_env bind env = bind :: env
+let extend_env var bind env = (var, bind) :: env
 
 let rec apply_env env var =
-  match env with
-  | [] -> raise Not_found
-  | ValBind (saved_var, saved_val) :: saved_env ->
-    if var = saved_var then
-      saved_val
-    else
-      apply_env saved_env var
-  | RecBind binds :: saved_env ->
-    try
-      let (p_name, b_vars, p_body) = List.find (fun (p_name, _, _) -> p_name = var) binds in
-      ProcVal (b_vars, p_body, env)
-    with Not_found -> apply_env saved_env var
+  let bd = List.assoc var env in
+  match bd with
+  | ValBind saved_val -> saved_val
+  | RecBind mut_saved_val -> !mut_saved_val
 
 exception Interpreter_error of string * Ploc.t
 
@@ -64,7 +56,7 @@ let rec value_of exp env =
      with Not_found -> raise (Interpreter_error ("the variable " ^ var ^ " is not in the environment", loc)))
   | LetExp (var, exp1, body, loc) ->
     let eval1 = value_of exp1 env in
-    value_of body (extend_env (ValBind (var, eval1)) env)
+    value_of body (extend_env var (ValBind  eval1) env)
   | ProcExp (vars, body, loc) -> ProcVal (vars, body, env)
   | CallExp (rator, rands, loc) ->
     let rator_val = value_of rator env in
@@ -72,13 +64,19 @@ let rec value_of exp env =
      | ProcVal proc -> let rand_vals = List.map (fun rand -> value_of rand env) rands in apply_procedure proc rand_vals loc
      | _ -> raise (Interpreter_error ("the operator of call shoud be a procedure", loc)))
   | LetrecExp (binds, letrec_body, loc) ->
-    value_of letrec_body (extend_env (RecBind binds) env)
+    let (new_env, refs) =
+      List.fold_left
+        (fun (new_env, refs) (p_name, b_vars, p_body) ->
+           let mut_proc = ref (ProcVal (b_vars, p_body, [])) in
+           (extend_env p_name (RecBind mut_proc) new_env, mut_proc :: refs)) (env, []) binds in
+    let () = List.iter (fun mut_proc -> let ProcVal (b_vars, p_body, _) = !mut_proc in mut_proc := ProcVal (b_vars, p_body, new_env)) refs in
+    value_of letrec_body new_env
 
 and apply_procedure proc arg_vals call_site =
   match proc with
   | (vars, body, saved_env) ->
     if List.length arg_vals = List.length vars then
-      value_of body (List.fold_left (fun env (var, arg_val) -> extend_env (ValBind (var, arg_val)) env) saved_env (List.combine vars arg_vals))
+      value_of body (List.fold_left (fun env (var, arg_val) -> extend_env var (ValBind arg_val) env) saved_env (List.combine vars arg_vals))
     else
       raise (Interpreter_error ("the parameters and arguments are not consistent at call site", call_site))
 
@@ -87,14 +85,17 @@ let value_of_top_level top env =
   | ExpTop exp1 ->
     let eval1 = value_of exp1 env in
     (eval1 |> string_of_expval |> prefix "val it = " |> suffix ";" |> print_endline);
-    extend_env (ValBind ("it", eval1)) env
+    extend_env "it" (ValBind eval1) env
   | ValTop (var, exp1) ->
     let eval1 = value_of exp1 env in
     (eval1 |> string_of_expval |> prefix ("val " ^ var ^ " = ") |> suffix ";" |> print_endline);
-    extend_env (ValBind (var, eval1)) env
-  | RecTop (p_name, b_var, p_body) ->
-    let new_env = extend_env (RecBind [(p_name, b_var, p_body)]) env in
-    let proc_val = ProcVal (b_var, p_body, new_env) in
+    extend_env var (ValBind eval1) env
+  | RecTop (p_name, b_vars, p_body) ->
+    let mut_proc = ref (ProcVal (b_vars, p_body, [])) in
+    let new_env = extend_env p_name (RecBind mut_proc) env in
+    let ProcVal (b_vars, p_body, _) = !mut_proc in
+    let () = mut_proc := ProcVal (b_vars, p_body, new_env) in
+    let proc_val = !mut_proc in
     (proc_val |> string_of_expval |> prefix ("val " ^ p_name ^ " = ") |> suffix ";" |> print_endline);
     new_env
 
