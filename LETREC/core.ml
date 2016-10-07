@@ -1,7 +1,7 @@
 open Support
 open Syntax
 
-type environment = bind list
+type environment = (string * bind) list
 
 and expval =
   | NumVal of int
@@ -11,8 +11,8 @@ and expval =
 and proc = string * expression * environment
 
 and bind =
-  | ValBind of string * expval
-  | RecBind of string * string * expression
+  | ValBind of expval
+  | RecBind of string * expression
 
 let string_of_expval eval =
   match eval with
@@ -22,17 +22,17 @@ let string_of_expval eval =
 
 let empty_env () = []
 
-let extend_env bind env = bind :: env
+let extend_env var bind env = (var, bind) :: env
 
 let rec apply_env env var =
   match env with
   | [] -> raise Not_found
-  | ValBind (saved_var, saved_val) :: saved_env ->
+  | (saved_var, ValBind saved_val) :: saved_env ->
     if var = saved_var then
       saved_val
     else
       apply_env saved_env var
-  | RecBind (p_name, b_var, p_body) :: saved_env ->
+  | (p_name, RecBind (b_var, p_body)) :: saved_env ->
     if var = p_name then
       ProcVal (b_var, p_body, env)
     else
@@ -64,7 +64,7 @@ let rec value_of exp env =
      with Not_found -> raise (Interpreter_error ("the variable " ^ var ^ " is not in the environment", loc)))
   | LetExp (var, exp1, body, loc) ->
     let eval1 = value_of exp1 env in
-    value_of body (extend_env (ValBind (var, eval1)) env)
+    value_of body (extend_env var (ValBind eval1) env)
   | ProcExp (var, body, loc) -> ProcVal (var, body, env)
   | CallExp (rator, rand, loc) ->
     let rator_val = value_of rator env in
@@ -72,24 +72,24 @@ let rec value_of exp env =
      | ProcVal proc -> let rand_val = value_of rand env in apply_procedure proc rand_val
      | _ -> raise (Interpreter_error ("the operator of call shoud be a procedure", loc)))
   | LetrecExp (p_name, b_var, p_body, letrec_body, loc) ->
-    value_of letrec_body (extend_env (RecBind (p_name, b_var, p_body)) env)
+    value_of letrec_body (extend_env p_name (RecBind (b_var, p_body)) env)
 
 and apply_procedure proc arg_val =
   match proc with
-  | (var, body, saved_env) -> value_of body (extend_env (ValBind (var, arg_val)) saved_env)
+  | (var, body, saved_env) -> value_of body (extend_env var (ValBind arg_val) saved_env)
 
 let value_of_top_level top env =
   match top with
   | ExpTop exp1 ->
     let eval1 = value_of exp1 env in
     (eval1 |> string_of_expval |> prefix "val it = " |> suffix ";" |> print_endline);
-    extend_env (ValBind ("it", eval1)) env
+    extend_env "it" (ValBind eval1) env
   | ValTop (var, exp1) ->
     let eval1 = value_of exp1 env in
     (eval1 |> string_of_expval |> prefix ("val " ^ var ^ " = ") |> suffix ";" |> print_endline);
-    extend_env (ValBind (var, eval1)) env
+    extend_env var (ValBind eval1) env
   | RecTop (p_name, b_var, p_body) ->
-    let new_env = extend_env (RecBind (p_name, b_var, p_body)) env in
+    let new_env = extend_env p_name (RecBind (b_var, p_body)) env in
     let proc_val = ProcVal (b_var, p_body, new_env) in
     (proc_val |> string_of_expval |> prefix ("val " ^ p_name ^ " = ") |> suffix ";" |> print_endline);
     new_env
