@@ -15,6 +15,7 @@ and expression =
   | ProcExp of string * expression * Ploc.t
   | CallExp of expression * expression * Ploc.t
   | CondExp of (expression * expression) list * Ploc.t
+  | LetrecExp of string * string * expression * expression * Ploc.t
 
 val parse : char Stream.t -> program
 
@@ -35,3 +36,5 @@ and nameless_expression =
   | NLProcExp of nameless_expression * Ploc.t
   | NLCallExp of nameless_expression * nameless_expression * Ploc.t
   | NLCondExp of (nameless_expression * nameless_expression) list * Ploc.t
+  | NLLetrecExp of nameless_expression * nameless_expression * Ploc.t
+  | NLLetrecVarExp of int * Ploc.t

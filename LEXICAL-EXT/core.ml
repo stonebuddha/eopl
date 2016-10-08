@@ -19,13 +19,24 @@ let string_of_expval eval =
   | BoolVal bool -> string_of_bool bool
   | ProcVal _ -> "<proc>"
 
+exception Impossible
+
 let empty_env () = []
 
 let extend_env bind env = bind :: env
 
-let rec apply_env env n =
-  match List.nth env n with
-  | ValBind saved_val -> saved_val
+let rec apply_env env n is_letrec =
+  match env with
+  | [] -> raise Impossible
+  | ValBind saved_val :: tl ->
+    if n = 0 then
+      if is_letrec then
+        let ProcVal (p_body, _) = saved_val in
+        ProcVal (p_body, env)
+      else
+        saved_val
+    else
+      apply_env tl (n - 1) is_letrec
 
 exception Interpreter_error of string * Ploc.t
 
@@ -48,7 +59,7 @@ let rec value_of exp env =
     (match eval1 with
      | BoolVal bool1 -> if bool1 then value_of exp2 env else value_of exp3 env
      | _ -> raise (Interpreter_error ("the predicate of if should be a boolean", loc)))
-  | NLVarExp (n, loc) -> apply_env env n
+  | NLVarExp (n, loc) -> apply_env env n false
   | NLLetExp (exp1, body, loc) ->
     let eval1 = value_of exp1 env in
     value_of body (extend_env (ValBind eval1) env)
@@ -69,6 +80,9 @@ let rec value_of exp env =
           | BoolVal false -> inner tl
           | _ -> raise (Interpreter_error ("all clauses should have a boolean-valued condition", loc)))) in
     inner clauses
+  | NLLetrecExp (p_body, letrec_body, loc) ->
+    value_of letrec_body (extend_env (ValBind (ProcVal (p_body, env))) env)
+  | NLLetrecVarExp (n, loc) -> apply_env env n true
 
 and apply_procedure proc arg_val =
   match proc with

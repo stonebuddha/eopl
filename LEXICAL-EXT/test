@@ -14,3 +14,75 @@ let x = 200 in let f = proc (z) -(z, x) in let x = 100 in let g = proc (z) -(z, 
 val minus_two = -(0, 2);
 cond is_zero(0) ==> 1 is_zero(1) ==> 2 end;
 cond is_zero(1) ==> 1 is_zero(0) ==> 2 end;
+let add = proc (x) proc (y) -(x, -(0, y)) in ((add 12) 32);
+let minus = proc (x) proc (y) -(x, y) in ((minus 5) 4);
+let makemult =
+  proc (maker)
+    proc (x)
+      if is_zero(x)
+      then 0
+      else -(((maker maker) -(x, 1)), -(0, 4))
+in let times4 = proc (x) ((makemult makemult) x)
+   in (times4 3);
+let makemult =
+  proc (maker)
+    proc (x) proc (y)
+      if is_zero(x)
+      then 0
+      else -((((maker maker) -(x, 1)) y), -(0, y))
+in let mult = proc (x) proc (y) (((makemult makemult) x) y)
+   in let makefac =
+        proc (maker)
+          proc (n)
+            if is_zero(n)
+            then 1
+            else ((mult n) ((maker maker) -(n, 1)))
+      in let fac = proc (n) ((makefac makefac) n)
+         in (fac 10);
+let true = is_zero(0)
+in
+  let false = is_zero(1)
+  in
+    let makeodd =
+      proc (makerodd) proc (makereven)
+        proc (x)
+          if is_zero(x)
+          then false
+          else (((makereven makerodd) makereven) -(x, 1))
+    in
+      let makeeven =
+        proc (makerodd) proc (makereven)
+          proc (x)
+            if is_zero(x)
+            then true
+            else (((makerodd makerodd) makereven) -(x, 1))
+      in
+        let odd = proc (x) (((makeodd makeodd) makeeven) x) in
+        let even = proc (x) (((makeeven makeodd) makeeven) x) in
+          (even 10);
+let makerec =
+  proc (f)
+    (proc (m) proc (x) ((f (m m)) x)
+     proc (m) proc (x) ((f (m m)) x))
+in
+  let maketimes4 = proc (f)
+                     proc (x)
+                       if is_zero(x)
+                       then 0
+                       else -((f -(x, 1)), -(0, 4))
+  in let times4 = (makerec maketimes4)
+     in (times4 3);
+let makerec =
+  proc (f)
+    (proc (m) (f proc (x) ((m m) x))
+     proc (m) (f proc (x) ((m m) x)))
+in
+  let maketimes4 = proc (f)
+                     proc (x)
+                       if is_zero(x)
+                       then 0
+                       else -((f -(x, 1)), -(0, 4))
+  in let times4 = (makerec maketimes4)
+     in (times4 3);
+letrec double (x) = if is_zero(x) then 0 else -((double -(x, 1)), -(0, 2))
+in (double 16);

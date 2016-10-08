@@ -15,6 +15,7 @@ and expression =
   | ProcExp of string * expression * Ploc.t
   | CallExp of expression * expression * Ploc.t
   | CondExp of (expression * expression) list * Ploc.t
+  | LetrecExp of string * string * expression * expression * Ploc.t
 
 let g = Grammar.gcreate (Plexer.gmake ())
 
@@ -42,6 +43,8 @@ and nameless_expression =
   | NLProcExp of nameless_expression * Ploc.t
   | NLCallExp of nameless_expression * nameless_expression * Ploc.t
   | NLCondExp of (nameless_expression * nameless_expression) list * Ploc.t
+  | NLLetrecExp of nameless_expression * nameless_expression * Ploc.t
+  | NLLetrecVarExp of int * Ploc.t
 
 EXTEND
   p : [
@@ -60,7 +63,8 @@ EXTEND
     | "let"; var = LIDENT; "="; exp1 = e; "in"; body = e -> LetExp (var, exp1, body, loc)
     | "proc"; "("; var = LIDENT; ")"; body = e -> ProcExp (var, body, loc)
     | "("; rator = e; rand = e; ")" -> CallExp (rator, rand, loc)
-    | "cond"; clauses = LIST0 c; "end" -> CondExp (clauses, loc) ]
+    | "cond"; clauses = LIST0 c; "end" -> CondExp (clauses, loc)
+    | "letrec"; p_name = LIDENT; "("; b_var = LIDENT; ")"; "="; p_body = e; "in"; letrec_body = e -> LetrecExp (p_name, b_var, p_body, letrec_body, loc) ]
   ];
   c : [
     [ exp1 = e; "==>"; exp2 = e -> (exp1, exp2) ]
