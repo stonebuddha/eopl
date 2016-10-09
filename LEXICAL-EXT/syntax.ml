@@ -11,11 +11,11 @@ and expression =
   | IsZeroExp of expression * Ploc.t
   | IfExp of expression * expression * expression * Ploc.t
   | VarExp of string * Ploc.t
-  | LetExp of string * expression * expression * Ploc.t
-  | ProcExp of string * expression * Ploc.t
-  | CallExp of expression * expression * Ploc.t
+  | LetExp of (string * expression) list * expression * Ploc.t
+  | ProcExp of string list * expression * Ploc.t
+  | CallExp of expression * expression list * Ploc.t
   | CondExp of (expression * expression) list * Ploc.t
-  | LetrecExp of string * string * expression * expression * Ploc.t
+  | LetrecExp of (string * string list * expression) list * expression * Ploc.t
 
 let g = Grammar.gcreate (Plexer.gmake ())
 
@@ -23,6 +23,8 @@ let p = Grammar.Entry.create g "program"
 let t = Grammar.Entry.create g "top level"
 let e = Grammar.Entry.create g "expression"
 let c = Grammar.Entry.create g "clause"
+let l = Grammar.Entry.create g "let binding"
+let r = Grammar.Entry.create g "letrec binding"
 
 let parse = Grammar.Entry.parse p
 
@@ -38,13 +40,13 @@ and nameless_expression =
   | NLDiffExp of nameless_expression * nameless_expression * Ploc.t
   | NLIsZeroExp of nameless_expression * Ploc.t
   | NLIfExp of nameless_expression * nameless_expression * nameless_expression * Ploc.t
-  | NLVarExp of int * Ploc.t
-  | NLLetExp of nameless_expression * nameless_expression * Ploc.t
+  | NLVarExp of (int * int) * Ploc.t
+  | NLLetExp of nameless_expression list * nameless_expression * Ploc.t
   | NLProcExp of nameless_expression * Ploc.t
-  | NLCallExp of nameless_expression * nameless_expression * Ploc.t
+  | NLCallExp of nameless_expression * nameless_expression list * Ploc.t
   | NLCondExp of (nameless_expression * nameless_expression) list * Ploc.t
-  | NLLetrecExp of nameless_expression * nameless_expression * Ploc.t
-  | NLLetrecVarExp of int * Ploc.t
+  | NLLetrecExp of nameless_expression list * nameless_expression * Ploc.t
+  | NLLetrecVarExp of (int * int) * Ploc.t
 
 EXTEND
   p : [
@@ -60,13 +62,19 @@ EXTEND
     | "is_zero"; "("; exp1 = e; ")" -> IsZeroExp (exp1, loc)
     | "if"; exp1 = e; "then"; exp2 = e; "else"; exp3 = e -> IfExp (exp1, exp2, exp3, loc)
     | var = LIDENT -> VarExp (var, loc)
-    | "let"; var = LIDENT; "="; exp1 = e; "in"; body = e -> LetExp (var, exp1, body, loc)
-    | "proc"; "("; var = LIDENT; ")"; body = e -> ProcExp (var, body, loc)
-    | "("; rator = e; rand = e; ")" -> CallExp (rator, rand, loc)
+    | "let"; binds = LIST0 l; "in"; body = e -> LetExp (binds, body, loc)
+    | "proc"; "("; vars = LIST0 LIDENT SEP ","; ")"; body = e -> ProcExp (vars, body, loc)
+    | "("; rator = e; rands = LIST0 e; ")" -> CallExp (rator, rands, loc)
     | "cond"; clauses = LIST0 c; "end" -> CondExp (clauses, loc)
-    | "letrec"; p_name = LIDENT; "("; b_var = LIDENT; ")"; "="; p_body = e; "in"; letrec_body = e -> LetrecExp (p_name, b_var, p_body, letrec_body, loc) ]
+    | "letrec"; binds = LIST0 r; "in"; letrec_body = e -> LetrecExp (binds, letrec_body, loc) ]
   ];
   c : [
     [ exp1 = e; "==>"; exp2 = e -> (exp1, exp2) ]
+  ];
+  l : [
+    [ var = LIDENT; "="; exp1 = e -> (var, exp1) ]
+  ];
+  r : [
+    [ p_name = LIDENT; "("; b_vars = LIST0 LIDENT SEP ","; ")"; "="; p_body = e -> (p_name, b_vars, p_body) ]
   ];
 END
