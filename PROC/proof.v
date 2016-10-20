@@ -1,4 +1,4 @@
-Require Import Bool ZArith Arith String List.
+Require Import Bool ZArith Arith String List Max.
 Set Implicit Arguments.
 
 Inductive expression : Set :=
@@ -95,105 +95,118 @@ Theorem value_of_soundness : forall exp env val, (exists fuel, value_of exp env 
     destruct H as [ fuel H ].
     generalize dependent val.
     generalize dependent env.
-    generalize dependent fuel.
-    induction exp; intros; destruct fuel; try discriminate; simpl in H; eauto.
-        apply option_eq in H. rewrite <- H. auto.
+    generalize dependent exp.
+    induction fuel; intros; simpl in H; try discriminate.
+    destruct exp; eauto.
+        apply option_eq in H; rewrite <- H; auto.
 
         destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        specialize (IHexp1 fuel env e).
+        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
         destruct (value_of exp2 env fuel) eqn:?; try discriminate.
-        specialize (IHexp2 fuel env e0).
+        assert (H2 := IHfuel exp2 env e0); apply H2 in Heqo0; clear H2.
         destruct e eqn:?; try discriminate.
         destruct e0 eqn:?; try discriminate.
-        apply option_eq in H. rewrite <- H. auto.
+        apply option_eq in H; rewrite <- H; auto.
 
         destruct (value_of exp env fuel) eqn:?; try discriminate.
-        specialize (IHexp fuel env e).
+        assert (H1 := IHfuel exp env e); apply H1 in Heqo; clear H1.
         destruct e eqn:?; try discriminate.
-        apply option_eq in H. rewrite <- H. auto.
+        apply option_eq in H; rewrite <- H; auto.
 
         destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        specialize (IHexp1 fuel env e).
-        destruct e; try discriminate.
-        destruct b. specialize (IHexp2 fuel env val). auto. specialize (IHexp3 fuel env val). auto.
+        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
+        destruct e eqn:?; try discriminate.
+        destruct b; auto.
+
+        destruct (value_of exp1 env fuel) eqn:?; try discriminate; eauto.
+
+        apply option_eq in H; rewrite <- H; auto.
 
         destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        specialize (IHexp1 fuel env e).
-        specialize (IHexp2 fuel (extend_env s e env) val). eauto.
-
-        apply option_eq in H. rewrite <- H. auto.
-
-        destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        specialize (IHexp1 fuel env e).
-        destruct e; try discriminate.
-        destruct (value_of exp2 env fuel) eqn:?; try discriminate.
-        specialize (IHexp2 fuel env e1).
-Admitted.
-
-Lemma fuel_greater_than_zero : forall exp env fuel val, value_of exp env fuel = Some val -> fuel > O.
-    intros.
-    destruct fuel; try omega; discriminate.
+        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
+        destruct e eqn:?; try discriminate.
+        destruct (value_of exp2 env fuel) eqn:?; try discriminate; eauto.
 Qed.
 
-Lemma fuel_partial_order : forall exp env fuel val, value_of exp env fuel = Some val -> value_of exp env (S fuel) = Some val.
+Lemma fuel_incr : forall exp env fuel val, value_of exp env fuel = Some val -> value_of exp env (S fuel) = Some val.
     intros.
     generalize dependent val.
     generalize dependent env.
-    generalize dependent fuel.
-    induction exp; intros; destruct fuel; try discriminate; simpl in H; eauto.
+    generalize dependent exp.
+    induction fuel; intros; simpl in H; try discriminate.
+    destruct exp; eauto.
         destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        specialize (IHexp1 fuel env e).
+        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
         destruct (value_of exp2 env fuel) eqn:?; try discriminate.
-        specialize (IHexp2 fuel env e0).
+        assert (H2 := IHfuel exp2 env e0); apply H2 in Heqo0; clear H2.
         destruct e eqn:?; try discriminate.
         destruct e0 eqn:?; try discriminate.
-        apply option_eq in H. rewrite <- H.
-        apply IHexp1 in Heqo.
-        apply IHexp2 in Heqo0.
         rewrite value_of_equation.
         rewrite -> Heqo.
         rewrite -> Heqo0.
         auto.
 
         destruct (value_of exp env fuel) eqn:?; try discriminate.
-        specialize (IHexp fuel env e).
+        assert (H1 := IHfuel exp env e); apply H1 in Heqo; clear H1.
         destruct e eqn:?; try discriminate.
-        apply option_eq in H. rewrite <- H.
-        apply IHexp in Heqo.
         rewrite value_of_equation.
         rewrite -> Heqo.
         auto.
 
         destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        specialize (IHexp1 fuel env e).
+        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
         destruct e eqn:?; try discriminate.
-        apply IHexp1 in Heqo.
-        destruct b.
-            specialize (IHexp2 fuel env val). apply IHexp2 in H. rewrite value_of_equation. rewrite -> Heqo. auto.
-            specialize (IHexp3 fuel env val). apply IHexp3 in H. rewrite value_of_equation. rewrite -> Heqo. auto.
+        destruct b; rewrite value_of_equation; rewrite -> Heqo; auto.
 
         destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        specialize (IHexp1 fuel env e).
-        apply IHexp1 in Heqo.
-        specialize (IHexp2 fuel (extend_env s e env) val).
-        apply IHexp2 in H.
+        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
         rewrite value_of_equation.
         rewrite -> Heqo.
         auto.
 
         destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        specialize (IHexp1 fuel env e).
-        apply IHexp1 in Heqo.
-        destruct e eqn:?; try discriminate.
+        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
+        destruct e; try discriminate.
         destruct (value_of exp2 env fuel) eqn:?; try discriminate.
-        specialize (IHexp2 fuel env e2).
-        apply IHexp2 in Heqo0.
+        assert (H2 := IHfuel exp2 env e1); apply H2 in Heqo0; clear H2.
         rewrite value_of_equation.
         rewrite -> Heqo.
         rewrite -> Heqo0.
-Admitted.
+        auto.
+Qed.
+
+Hint Resolve fuel_incr.
+
+Lemma fuel_order : forall exp env val fuel fuel', value_of exp env fuel = Some val -> fuel <= fuel' -> value_of exp env fuel' = Some val.
+    intros; induction H0; auto.
+Qed.
+
+Hint Resolve fuel_order.
+
+Lemma le_max_1 : forall a b c, a <= max (max a b) c.
+    intros.
+    assert (max a (max b c) = max (max a b) c).
+        apply max_assoc.
+    rewrite <- H.
+    apply le_max_l.
+Qed.
+
+Lemma le_max_2 : forall a b c, b <= max (max a b) c.
+    intros.
+    assert (b <= max a b).
+        apply le_max_r.
+    assert (max a b <= max (max a b) c).
+        apply le_max_l.
+    omega.
+Qed.
+
+Lemma le_max_3 : forall a b c, c <= max (max a b) c.
+    intros.
+    apply le_max_r.
+Qed.
 
 Theorem value_of_completeness : forall exp env val, value_of_rel exp env val -> exists fuel, value_of exp env fuel = Some val.
+    Hint Resolve le_max_l le_max_r le_max_1 le_max_2 le_max_3.
     intros.
     induction H.
         exists (S O); auto.
@@ -201,7 +214,62 @@ Theorem value_of_completeness : forall exp env val, value_of_rel exp env val -> 
         destruct IHvalue_of_rel1 as [ fuel1 H1 ].
         destruct IHvalue_of_rel2 as [ fuel2 H2 ].
         exists (S (max fuel1 fuel2)).
-Abort.
+        apply fuel_order with (fuel' := max fuel1 fuel2) in H1; auto.
+        apply fuel_order with (fuel' := max fuel1 fuel2) in H2; auto.
+        rewrite value_of_equation.
+        rewrite -> H1.
+        rewrite -> H2.
+        auto.
+
+        destruct IHvalue_of_rel as [ fuel1 H1 ].
+        exists (S fuel1).
+        rewrite value_of_equation.
+        rewrite -> H1.
+        auto.
+
+        destruct IHvalue_of_rel1 as [ fuel1 H1 ].
+        destruct IHvalue_of_rel2 as [ fuel2 H2 ].
+        exists (S (max fuel1 fuel2)).
+        apply fuel_order with (fuel' := max fuel1 fuel2) in H1; auto.
+        rewrite value_of_equation.
+        rewrite -> H1.
+        eauto.
+
+        destruct IHvalue_of_rel1 as [ fuel1 H1 ].
+        destruct IHvalue_of_rel2 as [ fuel2 H2 ].
+        exists (S (max fuel1 fuel2)).
+        apply fuel_order with (fuel' := max fuel1 fuel2) in H1; auto.
+        rewrite value_of_equation.
+        rewrite -> H1.
+        eauto.
+
+        exists (S O); auto.
+
+        destruct IHvalue_of_rel1 as [ fuel1 H1 ].
+        destruct IHvalue_of_rel2 as [ fuel2 H2 ].
+        exists (S (max fuel1 fuel2)).
+        apply fuel_order with (fuel' := max fuel1 fuel2) in H1; auto.
+        rewrite value_of_equation.
+        rewrite -> H1.
+        eauto.
+
+        exists (S O); auto.
+
+        destruct IHvalue_of_rel1 as [ fuel2 H2 ].
+        destruct IHvalue_of_rel2 as [ fuel3 H3 ].
+        destruct IHvalue_of_rel3 as [ fuel4 H4 ].
+        exists (S (max (max fuel2 fuel3) fuel4)).
+        apply fuel_order with (fuel' := max (max fuel2 fuel3) fuel4) in H2; auto.
+        apply fuel_order with (fuel' := max (max fuel2 fuel3) fuel4) in H3; auto.
+        rewrite value_of_equation.
+        rewrite -> H2.
+        rewrite -> H3.
+        apply fuel_order with (fuel' := max (max fuel2 fuel3) fuel4) in H4; auto.
+Qed.
 
 Theorem value_of_correctness : forall exp env val, (exists fuel, value_of exp env fuel = Some val) <-> value_of_rel exp env val.
-Abort.
+    intros.
+    split.
+        apply value_of_soundness.
+        apply value_of_completeness.
+Qed.
