@@ -27,13 +27,18 @@ Module Proc.
   Inductive expval : Set :=
   | Num : Z -> expval
   | Bool : bool -> expval
-  | Clo : string -> expression -> (string -> option expval) -> expval
+  | Clo : string -> expression -> list (string * expval) -> expval
   .
 
-  Definition environment := string -> option expval.
-  Definition empty_env : environment := (fun _ => None).
-  Definition extend_env (x : string) (v : expval) (env : environment) :=
-      fun y => if string_dec x y then Some v else env y.
+  Definition environment := list (string * expval).
+  Definition empty_env : environment := nil.
+  Definition extend_env (x : string) (v : expval) (env : environment) := (x, v) :: env.
+
+  Fixpoint assoc (x : string) (env : environment) : option expval :=
+      match env with
+      | nil => None
+      | (y, v) :: saved_env => if string_dec x y then Some v else assoc x saved_env
+      end.
 
   Inductive value_of_rel : expression -> environment -> expval -> Prop :=
   | VConst : forall num env, value_of_rel (Const num) env (Num (Z.of_nat num))
@@ -41,7 +46,7 @@ Module Proc.
   | VIsZero : forall exp1 num1 env, value_of_rel exp1 env (Num num1) -> value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
   | VIfTrue : forall exp1 exp2 exp3 val2 env, value_of_rel exp1 env (Bool true) -> value_of_rel exp2 env val2 -> value_of_rel (If exp1 exp2 exp3) env val2
   | VIfFalse : forall exp1 exp2 exp3 val3 env, value_of_rel exp1 env (Bool false) -> value_of_rel exp3 env val3 -> value_of_rel (If exp1 exp2 exp3) env val3
-  | VVar : forall var env val, env var = Some val -> value_of_rel (Var var) env val
+  | VVar : forall var env val, assoc var env = Some val -> value_of_rel (Var var) env val
   | VLet : forall var exp1 body env val1 valb, value_of_rel exp1 env val1 -> value_of_rel body (extend_env var val1 env) valb -> value_of_rel (Let var exp1 body) env valb
   | VProc : forall var body env, value_of_rel (Proc var body) env (Clo var body env)
   | VCall : forall rator rand env var body saved_env rand_val valb, value_of_rel rator env (Clo var body saved_env) -> value_of_rel rand env rand_val -> value_of_rel body (extend_env var rand_val saved_env) valb -> value_of_rel (Call rator rand) env valb
@@ -262,4 +267,44 @@ Module Translation.
               rand <- translation_of rand senv;
               Some (Lexical.Call rator rand)
       end.
+
+  Fixpoint proc_environment_to_static_environment (env : Proc.environment) : static_environment :=
+      match env with
+      | nil => nil
+      | (x, _) :: saved_env => x :: proc_environment_to_static_environment saved_env
+      end.
+
+  Fixpoint translation_of_expval (val : Proc.expval) : option Lexical.expval :=
+      match val with
+      | Proc.Num num => Some (Lexical.Num num)
+      | Proc.Bool bool => Some (Lexical.Bool bool)
+      | Proc.Clo var body saved_env =>
+              body <- translation_of body (extend_senv var (proc_environment_to_static_environment saved_env));
+              saved_env <- fold_right (fun pair env =>
+                                           val <- translation_of_expval (snd pair);
+                                           env <- env;
+                                           Some (val :: env)) (Some nil) saved_env;
+              Some (Lexical.Clo body saved_env)
+      end.
+
+  Definition translation_of_environment (env : Proc.environment) : option Lexical.environment := fold_right (fun pair env =>
+                                val <- translation_of_expval (snd pair);
+                                env <- env;
+                                Some (val :: env)) (Some nil) env.
+
+  Hint Constructors Proc.value_of_rel Lexical.value_of_rel.
+
+  Lemma translation_of_soundness_generalized : forall exp exp' env env' val val' senv, translation_of exp senv = Some exp' -> translation_of_environment env = Some env' -> translation_of_expval val = Some val' -> proc_environment_to_static_environment env = senv -> Lexical.value_of_rel exp' env' val' -> Proc.value_of_rel exp env val.
+  Admitted.
+
+  Theorem translation_of_soundness : forall exp exp' val val', translation_of exp empty_senv = Some exp' -> translation_of_expval val = Some val' -> Lexical.value_of_rel exp' Lexical.empty_env val' -> Proc.value_of_rel exp Proc.empty_env val.
+      intros; eapply translation_of_soundness_generalized; eauto; auto.
+  Qed.
+
+  Lemma translation_of_completeness_generalized : forall exp exp' env env' val val' senv, translation_of exp senv = Some exp' -> translation_of_environment env = Some env' -> translation_of_expval val = Some val' -> Proc.value_of_rel exp env val -> Lexical.value_of_rel exp' env' val'.
+  Admitted.
+
+  Theorem translation_of_completeness : forall exp exp' val val', translation_of exp empty_senv = Some exp' -> translation_of_expval val = Some val' -> Proc.value_of_rel exp Proc.empty_env val -> Lexical.value_of_rel exp' Lexical.empty_env val'.
+      intros; eapply translation_of_completeness_generalized; eauto; auto.
+  Qed.
 End Translation.
