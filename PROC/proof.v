@@ -12,7 +12,7 @@ Inductive expression : Set :=
 | Call : expression -> expression -> expression
 .
 
-Inductive expval : Type :=
+Inductive expval : Set :=
 | Num : Z -> expval
 | Bool : bool -> expval
 | Clo : string -> expression -> (string -> option expval) -> expval
