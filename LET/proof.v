@@ -17,7 +17,7 @@ Inductive expval : Set :=
 
 Definition environment := string -> option expval.
 Definition empty_env : environment := (fun _ => None).
-Definition extend_env (x : string) (v : expval) (env : environment) :=
+Definition extend_env (x : string) (v : expval) (env : environment) : environment :=
     fun y => if string_dec x y then Some v else env y.
 
 Inductive value_of_rel : expression -> environment -> expval -> Prop :=
