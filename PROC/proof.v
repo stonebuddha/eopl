@@ -12,18 +12,18 @@ Inductive expression : Set :=
 | Call : expression -> expression -> expression
 .
 
-Definition environment (A : Type) := string -> option A.
-Definition empty_env {A : Type} : environment A := (fun _ => None).
-Definition extend_env {A : Type} (x : string) (v : A) (env : environment A) :=
-    fun y => if string_dec x y then Some v else env y.
-
 Inductive expval : Type :=
 | Num : Z -> expval
 | Bool : bool -> expval
-| Clo : string -> expression -> environment expval -> expval
+| Clo : string -> expression -> (string -> option expval) -> expval
 .
 
-Inductive value_of_rel : expression -> environment expval -> expval -> Prop :=
+Definition environment := string -> option expval.
+Definition empty_env : environment := (fun _ => None).
+Definition extend_env (x : string) (v : expval) (env : environment) :=
+    fun y => if string_dec x y then Some v else env y.
+
+Inductive value_of_rel : expression -> environment -> expval -> Prop :=
 | VConst : forall num env, value_of_rel (Const num) env (Num (Z.of_nat num))
 | VDiff : forall exp1 exp2 num1 num2 env, value_of_rel exp1 env (Num num1) -> value_of_rel exp2 env (Num num2) -> value_of_rel (Diff exp1 exp2) env (Num (num1 - num2))
 | VIsZero : forall exp1 num1 env, value_of_rel exp1 env (Num num1) -> value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
@@ -42,7 +42,7 @@ Notation "x <- e1 ; e2" :=
     end)
 (right associativity, at level 60).
 
-Function value_of (exp : expression) (env : environment expval) (fuel : nat) : option expval :=
+Function value_of (exp : expression) (env : environment) (fuel : nat) : option expval :=
     match fuel with
     | O => None
     | S fuel' =>
