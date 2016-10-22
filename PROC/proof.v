@@ -92,101 +92,46 @@ Hint Constructors value_of_rel.
 
 Theorem value_of_soundness : forall exp env val, (exists fuel, value_of exp env fuel = Some val) -> value_of_rel exp env val.
     intros.
-    destruct H as [ fuel H ].
+    destruct 0 as [ fuel ? ].
     generalize dependent val.
     generalize dependent env.
     generalize dependent exp.
-    induction fuel; intros; simpl in H; try discriminate.
-    destruct exp; eauto.
-        apply option_eq in H; rewrite <- H; auto.
-
-        destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
-        destruct (value_of exp2 env fuel) eqn:?; try discriminate.
-        assert (H2 := IHfuel exp2 env e0); apply H2 in Heqo0; clear H2.
-        destruct e eqn:?; try discriminate.
-        destruct e0 eqn:?; try discriminate.
-        apply option_eq in H; rewrite <- H; auto.
-
-        destruct (value_of exp env fuel) eqn:?; try discriminate.
-        assert (H1 := IHfuel exp env e); apply H1 in Heqo; clear H1.
-        destruct e eqn:?; try discriminate.
-        apply option_eq in H; rewrite <- H; auto.
-
-        destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
-        destruct e eqn:?; try discriminate.
-        destruct b; auto.
-
-        destruct (value_of exp1 env fuel) eqn:?; try discriminate; eauto.
-
-        apply option_eq in H; rewrite <- H; auto.
-
-        destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
-        destruct e eqn:?; try discriminate.
-        destruct (value_of exp2 env fuel) eqn:?; try discriminate; eauto.
+    induction fuel; intros; try discriminate; destruct exp;
+    match goal with
+    | [ H : value_of _ _ _ = _ |- _ ] => simpl in H
+    end;
+    repeat (try match goal with
+                | [ _ : context[match value_of ?EXP ?ENV ?FUEL with Some _ => _ | None => _ end] |- _ ] => destruct (value_of EXP ENV FUEL) eqn:?; try discriminate
+                | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ _ => _ end] |- _ ] => destruct VAL; try discriminate
+                | [ _ : context[if ?B then _ else _] |- _ ] => destruct B
+                | [ H : Some _ = Some _ |- _ ] => apply option_eq in H; try (rewrite <- H)
+                end;
+            eauto).
 Qed.
 
-Lemma fuel_incr : forall exp env fuel val, value_of exp env fuel = Some val -> value_of exp env (S fuel) = Some val.
-    intros.
-    generalize dependent val.
-    generalize dependent env.
-    generalize dependent exp.
-    induction fuel; intros; simpl in H; try discriminate.
-    destruct exp; eauto.
-        destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
-        destruct (value_of exp2 env fuel) eqn:?; try discriminate.
-        assert (H2 := IHfuel exp2 env e0); apply H2 in Heqo0; clear H2.
-        destruct e eqn:?; try discriminate.
-        destruct e0 eqn:?; try discriminate.
-        rewrite value_of_equation.
-        rewrite -> Heqo.
-        rewrite -> Heqo0.
-        auto.
-
-        destruct (value_of exp env fuel) eqn:?; try discriminate.
-        assert (H1 := IHfuel exp env e); apply H1 in Heqo; clear H1.
-        destruct e eqn:?; try discriminate.
-        rewrite value_of_equation.
-        rewrite -> Heqo.
-        auto.
-
-        destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
-        destruct e eqn:?; try discriminate.
-        destruct b; rewrite value_of_equation; rewrite -> Heqo; auto.
-
-        destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
-        rewrite value_of_equation.
-        rewrite -> Heqo.
-        auto.
-
-        destruct (value_of exp1 env fuel) eqn:?; try discriminate.
-        assert (H1 := IHfuel exp1 env e); apply H1 in Heqo; clear H1.
-        destruct e; try discriminate.
-        destruct (value_of exp2 env fuel) eqn:?; try discriminate.
-        assert (H2 := IHfuel exp2 env e1); apply H2 in Heqo0; clear H2.
-        rewrite value_of_equation.
-        rewrite -> Heqo.
-        rewrite -> Heqo0.
-        auto.
+Lemma fuel_incr : forall fuel exp env val, value_of exp env fuel = Some val -> value_of exp env (S fuel) = Some val.
+    induction fuel; intros; try discriminate; destruct exp;
+    match goal with
+    | [ H : value_of _ _ _ = _ |- _ ] => simpl in H
+    end;
+    rewrite value_of_equation;
+    repeat (try match goal with
+                | [ _ : context[match value_of ?EXP ?ENV ?FUEL with Some _ => _ | None => _ end] |- _ ] => destruct (value_of EXP ENV FUEL) eqn:?; try discriminate
+                | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ _ => _ end] |- _ ] => destruct VAL; try discriminate
+                | [ _ : context[if ?B then _ else _] |- _ ] => destruct B
+                | [ IH : forall _, _, H : value_of ?EXP ?ENV ?FUEL = Some ?VAL |- context[match value_of ?EXP ?ENV (S ?FUEL) with Some _ => _ | None => _ end] ] => assert (T := IH EXP ENV VAL); apply T in H; clear T; try (rewrite -> H; clear H)
+           end; eauto).
 Qed.
-
-Hint Resolve fuel_incr.
 
 Lemma fuel_order : forall exp env val fuel fuel', value_of exp env fuel = Some val -> fuel <= fuel' -> value_of exp env fuel' = Some val.
-    intros; induction H0; auto.
+    Hint Resolve fuel_incr.
+    induction 2; auto.
 Qed.
-
-Hint Resolve fuel_order.
 
 Lemma le_max_1 : forall a b c, a <= max (max a b) c.
     intros.
     assert (max a (max b c) = max (max a b) c).
-        apply max_assoc.
+    apply max_assoc.
     rewrite <- H.
     apply le_max_l.
 Qed.
@@ -194,9 +139,9 @@ Qed.
 Lemma le_max_2 : forall a b c, b <= max (max a b) c.
     intros.
     assert (b <= max a b).
-        apply le_max_r.
+    apply le_max_r.
     assert (max a b <= max (max a b) c).
-        apply le_max_l.
+    apply le_max_l.
     omega.
 Qed.
 
@@ -207,69 +152,22 @@ Qed.
 
 Theorem value_of_completeness : forall exp env val, value_of_rel exp env val -> exists fuel, value_of exp env fuel = Some val.
     Hint Resolve le_max_l le_max_r le_max_1 le_max_2 le_max_3.
-    intros.
-    induction H.
-        exists (S O); auto.
-
-        destruct IHvalue_of_rel1 as [ fuel1 H1 ].
-        destruct IHvalue_of_rel2 as [ fuel2 H2 ].
-        exists (S (max fuel1 fuel2)).
-        apply fuel_order with (fuel' := max fuel1 fuel2) in H1; auto.
-        apply fuel_order with (fuel' := max fuel1 fuel2) in H2; auto.
-        rewrite value_of_equation.
-        rewrite -> H1.
-        rewrite -> H2.
-        auto.
-
-        destruct IHvalue_of_rel as [ fuel1 H1 ].
-        exists (S fuel1).
-        rewrite value_of_equation.
-        rewrite -> H1.
-        auto.
-
-        destruct IHvalue_of_rel1 as [ fuel1 H1 ].
-        destruct IHvalue_of_rel2 as [ fuel2 H2 ].
-        exists (S (max fuel1 fuel2)).
-        apply fuel_order with (fuel' := max fuel1 fuel2) in H1; auto.
-        rewrite value_of_equation.
-        rewrite -> H1.
-        eauto.
-
-        destruct IHvalue_of_rel1 as [ fuel1 H1 ].
-        destruct IHvalue_of_rel2 as [ fuel2 H2 ].
-        exists (S (max fuel1 fuel2)).
-        apply fuel_order with (fuel' := max fuel1 fuel2) in H1; auto.
-        rewrite value_of_equation.
-        rewrite -> H1.
-        eauto.
-
-        exists (S O); auto.
-
-        destruct IHvalue_of_rel1 as [ fuel1 H1 ].
-        destruct IHvalue_of_rel2 as [ fuel2 H2 ].
-        exists (S (max fuel1 fuel2)).
-        apply fuel_order with (fuel' := max fuel1 fuel2) in H1; auto.
-        rewrite value_of_equation.
-        rewrite -> H1.
-        eauto.
-
-        exists (S O); auto.
-
-        destruct IHvalue_of_rel1 as [ fuel2 H2 ].
-        destruct IHvalue_of_rel2 as [ fuel3 H3 ].
-        destruct IHvalue_of_rel3 as [ fuel4 H4 ].
-        exists (S (max (max fuel2 fuel3) fuel4)).
-        apply fuel_order with (fuel' := max (max fuel2 fuel3) fuel4) in H2; auto.
-        apply fuel_order with (fuel' := max (max fuel2 fuel3) fuel4) in H3; auto.
-        rewrite value_of_equation.
-        rewrite -> H2.
-        rewrite -> H3.
-        apply fuel_order with (fuel' := max (max fuel2 fuel3) fuel4) in H4; auto.
+    induction 1;
+    match goal with
+    | [ IH1 : exists _, _, IH2 : exists _, _, IH3 : exists _, _ |- _ ] => destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ]; destruct IH3 as [ fuel3 ? ]; exists (S (max (max fuel1 fuel2) fuel3))
+    | [ IH1 : exists _, _, IH2 : exists _, _ |- _ ] => destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ]; exists (S (max fuel1 fuel2))
+    | [ IH1 : exists _, _ |- _ ] => destruct IH1 as [ fuel1 ? ]; exists (S fuel1)
+    | [ |- _ ] => exists (S O)
+    end;
+    eauto;
+    rewrite value_of_equation;
+    repeat (try match goal with
+                | [ H : value_of ?EXP ?ENV ?FUEL1 = _ |- context[value_of ?EXP ?ENV ?FUEL2] ] => apply fuel_order with (fuel' := FUEL2) in H; auto; try (rewrite -> H; clear H)
+                end;
+            eauto).
 Qed.
 
 Theorem value_of_correctness : forall exp env val, (exists fuel, value_of exp env fuel = Some val) <-> value_of_rel exp env val.
-    intros.
-    split.
-        apply value_of_soundness.
-        apply value_of_completeness.
+    Hint Resolve value_of_soundness value_of_completeness.
+    intros; split; auto.
 Qed.
