@@ -73,43 +73,29 @@ Qed.
 Hint Constructors value_of_rel.
 
 Theorem value_of_soundness : forall exp env val, value_of exp env = Some val -> value_of_rel exp env val.
-    intros.
-    generalize dependent val.
-    generalize dependent env.
-    induction exp; intros; eauto; simpl in H.
-        apply option_eq in H. rewrite <- H. auto.
-
-        destruct (value_of exp1 env) eqn:?; try discriminate.
-        specialize (IHexp1 env e). destruct (value_of exp2 env) eqn:?; try discriminate.
-        specialize (IHexp2 env e0). destruct e; try discriminate.
-        destruct e0; try discriminate.
-        apply option_eq in H. rewrite <- H. auto.
-
-        destruct (value_of exp env) eqn:?; try discriminate.
-        specialize (IHexp env e). destruct e; try discriminate.
-        apply option_eq in H. rewrite <- H. auto.
-
-        destruct (value_of exp1 env) eqn:?; try discriminate.
-        specialize (IHexp1 env e). destruct e; try discriminate.
-        destruct b; auto.
-
-        destruct (value_of exp1 env) eqn:?; try discriminate.
-        specialize (IHexp1 env e). specialize (IHexp2 (extend_env s e env) val). eauto.
+    induction exp; intros;
+    match goal with
+    | [ H : value_of _ _ = _ |- _ ] => simpl in H
+    end;
+    repeat (try match goal with
+                | [ _ : context[match value_of ?EXP ?ENV with Some _ => _ | None => _ end ] |- _ ] => destruct (value_of EXP ENV) eqn:?; try discriminate
+                | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ end ] |- _ ] => destruct VAL; try discriminate
+                | [ _ : context[if ?B then _ else _] |- _ ] => destruct b
+                | [ H : Some _ = Some _ |- _ ] => apply option_eq in H; try (rewrite <- H)
+                end;
+            eauto).
 Qed.
 
 Theorem value_of_completeness : forall exp env val, value_of_rel exp env val -> value_of exp env = Some val.
     intros.
-    induction H; simpl; eauto.
-        rewrite -> IHvalue_of_rel1. rewrite -> IHvalue_of_rel2. auto.
-        rewrite -> IHvalue_of_rel. auto.
-        rewrite -> IHvalue_of_rel1. auto.
-        rewrite -> IHvalue_of_rel1. auto.
-        rewrite -> IHvalue_of_rel1. auto.
+    induction 0; simpl;
+    repeat (try match goal with
+                | [ H : value_of ?EXP ?ENV = _ |- context[match value_of ?EXP ?ENV with Some _ => _ | None => _ end] ] => try (rewrite -> H; clear H)
+                end;
+            eauto).
 Qed.
 
 Theorem value_of_correctness : forall exp env val, value_of exp env = Some val <-> value_of_rel exp env val.
-    intros.
-    split.
-        apply value_of_soundness.
-        apply value_of_completeness.
+    Hint Resolve value_of_soundness value_of_completeness.
+    intros; split; auto.
 Qed.
