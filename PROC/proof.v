@@ -120,7 +120,8 @@ Lemma fuel_incr : forall fuel exp env val, value_of exp env fuel = Some val -> v
                 | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ _ => _ end] |- _ ] => destruct VAL; try discriminate
                 | [ _ : context[if ?B then _ else _] |- _ ] => destruct B
                 | [ IH : forall _, _, H : value_of ?EXP ?ENV ?FUEL = Some ?VAL |- context[match value_of ?EXP ?ENV (S ?FUEL) with Some _ => _ | None => _ end] ] => assert (T := IH EXP ENV VAL); apply T in H; clear T; try (rewrite -> H; clear H)
-           end; eauto).
+                end;
+            eauto).
 Qed.
 
 Lemma fuel_order : forall exp env val fuel fuel', value_of exp env fuel = Some val -> fuel <= fuel' -> value_of exp env fuel' = Some val.
