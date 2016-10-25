@@ -1,4 +1,5 @@
-Require Import Bool ZArith Arith String List Max Logic.Eqdep_dec.
+Require Import Bool ZArith Arith String List Max Logic.Eqdep_dec Program.Equality.
+Open Scope string_scope.
 Set Implicit Arguments.
 
 Notation "x <- e1 ; e2" :=
@@ -7,6 +8,21 @@ Notation "x <- e1 ; e2" :=
     | Some x => e2
     end)
 (right associativity, at level 60).
+
+Ltac simplify := repeat
+    match goal with
+    | h1 : False |- _ => destruct h1
+    | |- True => constructor
+    | h1 : True |- _ => clear h1
+    | |- ~ _ => intro
+    | h1 : ~ ?p1, h2 : ?p1 |- _ => destruct (h1 h2)
+    | h1 : _ \/ _ |- _ => destruct h1
+    | |- _ /\ _ => constructor
+    | h1 : _ /\ _ |- _ => destruct h1
+    | h1 : exists _, _ |- _ => destruct h1
+    | |- forall _, _ => intro
+    | _ : ?x1 = ?x2 |- _ => subst x2 || subst x1
+    end.
 
 Module Proc.
     Inductive expression : Set :=
@@ -29,9 +45,6 @@ Module Proc.
     | Empty : environment
     | Extend : string -> expval -> environment -> environment
     .
-
-    Scheme expval_mut := Induction for expval Sort Prop
-    with environment_mut := Induction for environment Sort Prop.
 
     Fixpoint assoc_error (x : string) (env : environment) : option expval :=
         match env with
@@ -63,6 +76,108 @@ Module Lexical.
     | Proc : forall ctx, expression (S ctx) -> expression ctx
     | Call : forall ctx, expression ctx -> expression ctx -> expression ctx
     .
+
+    Inductive exp_equiv : forall ctx, expression ctx -> expression ctx -> Prop :=
+    | EQConst : forall ctx num, exp_equiv (Const ctx num) (Const ctx num)
+    | EQDiff : forall ctx (exp1 : expression ctx) exp2 exp1' exp2', exp_equiv exp1 exp1' -> exp_equiv exp2 exp2' -> exp_equiv (Diff exp1 exp2) (Diff exp1' exp2')
+    | EIsZero : forall ctx (exp1 : expression ctx) exp1', exp_equiv exp1 exp1' -> exp_equiv (IsZero exp1) (IsZero exp1')
+    | EIf : forall ctx (exp1 : expression ctx) exp2 exp3 exp1' exp2' exp3', exp_equiv exp1 exp1' -> exp_equiv exp2 exp2' -> exp_equiv exp3 exp3' -> exp_equiv (If exp1 exp2 exp3) (If exp1' exp2' exp3')
+    | EVar : forall ctx n (pf : n < ctx) (pf' : n < ctx), exp_equiv (Var pf) (Var pf')
+    | ELet : forall ctx (exp1 : expression ctx) body exp1' body', exp_equiv exp1 exp1' -> exp_equiv body body' -> exp_equiv (Let exp1 body) (Let exp1' body')
+    | EProc : forall ctx (body : expression (S ctx)) body', exp_equiv body body' -> exp_equiv (Proc body) (Proc body')
+    | ECall : forall ctx (rator : expression ctx) rand rator' rand', exp_equiv rator rator' -> exp_equiv rand rand' -> exp_equiv (Call rator rand) (Call rator' rand')
+    .
+
+    Hint Constructors expression exp_equiv.
+    Hint Resolve eq_nat_dec inj_pair2_eq_dec.
+
+    Lemma exp_equiv_refl : forall ctx (exp : expression ctx), exp_equiv exp exp.
+        induction exp; eauto.
+    Qed.
+
+    Hint Resolve exp_equiv_refl.
+
+    Ltac existT_inversion :=
+        repeat (match goal with
+                | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2_eq_dec in H; auto
+                end); subst; eauto 10.
+
+    Lemma exp_equiv_const_inversion_left : forall ctx num exp2, exp_equiv (Const ctx num) exp2 -> exp2 = Const ctx num.
+        intros.
+        inversion H.
+        existT_inversion.
+    Qed.
+
+    Lemma exp_equiv_diff_inversion_left : forall ctx (exp11 : expression ctx) exp12 exp2, exp_equiv (Diff exp11 exp12) exp2 -> exists exp21 exp22, exp2 = Diff exp21 exp22 /\ exp_equiv exp11 exp21 /\ exp_equiv exp12 exp22.
+        intros.
+        inversion H.
+        existT_inversion.
+    Qed.
+
+    Lemma exp_equiv_is_zero_inversion_left : forall ctx (exp11 : expression ctx) exp2, exp_equiv (IsZero exp11) exp2 -> exists exp21, exp2 = IsZero exp21 /\ exp_equiv exp11 exp21.
+        intros.
+        inversion H.
+        existT_inversion.
+    Qed.
+
+    Lemma exp_equiv_if_inversion_left : forall ctx (exp11 : expression ctx) exp12 exp13 exp2, exp_equiv (If exp11 exp12 exp13) exp2 -> exists exp21 exp22 exp23, exp2 = If exp21 exp22 exp23 /\ exp_equiv exp11 exp21 /\ exp_equiv exp12 exp22 /\ exp_equiv exp13 exp23.
+        intros.
+        inversion H.
+        existT_inversion.
+    Qed.
+
+    Lemma exp_equiv_var_inversion_left : forall ctx n (pf1 : n < ctx) exp2, exp_equiv (Var pf1) exp2 -> exists (pf2 : n < ctx), exp2 = Var pf2.
+        intros.
+        inversion H.
+        existT_inversion.
+    Qed.
+
+    Lemma exp_equiv_let_inversion_left : forall ctx (exp11 : expression ctx) body1 exp2, exp_equiv (Let exp11 body1) exp2 -> exists exp21 body2, exp2 = Let exp21 body2 /\ exp_equiv exp11 exp21 /\ exp_equiv body1 body2.
+        intros.
+        inversion H.
+        existT_inversion.
+    Qed.
+
+    Lemma exp_equiv_proc_inversion_left : forall ctx (body1 : expression (S ctx)) exp2, exp_equiv (Proc body1) exp2 -> exists body2, exp2 = Proc body2 /\ exp_equiv body1 body2.
+        intros.
+        inversion H.
+        existT_inversion.
+    Qed.
+
+    Lemma exp_equiv_call_inversion_left : forall ctx (rator1 : expression ctx) rand1 exp2, exp_equiv (Call rator1 rand1) exp2 -> exists rator2 rand2, exp2 = Call rator2 rand2 /\ exp_equiv rator1 rator2 /\ exp_equiv rand1 rand2.
+        intros.
+        inversion H.
+        existT_inversion.
+    Qed.
+
+    Ltac exp_equiv_inversion H :=
+        match type of H with
+        | exp_equiv (Const _ _) _ => apply exp_equiv_const_inversion_left in H
+        | exp_equiv (Diff _ _) _ => apply exp_equiv_diff_inversion_left in H
+        | exp_equiv (IsZero _) _ => apply exp_equiv_is_zero_inversion_left in H
+        | exp_equiv (If _ _ _) _ => apply exp_equiv_if_inversion_left in H
+        | exp_equiv (Var _) _ => apply exp_equiv_var_inversion_left in H
+        | exp_equiv (Let _ _) _ => apply exp_equiv_let_inversion_left in H
+        | exp_equiv (Proc _) _ => apply exp_equiv_proc_inversion_left in H
+        | exp_equiv (Call _ _) _ => apply exp_equiv_call_inversion_left in H
+        end; simplify.
+
+    Lemma exp_equiv_symm : forall ctx (exp1 : expression ctx) exp2, exp_equiv exp1 exp2 -> exp_equiv exp2 exp1.
+        induction exp1; intros;
+        repeat (try match goal with
+                    | [ H : exp_equiv _ _ |- _ ] => exp_equiv_inversion H
+                    | [ IH : forall _, _ |- _ ] => eapply IH
+                    end;
+                eauto).
+    Qed.
+
+    Lemma exp_equiv_trans : forall ctx (exp1 : expression ctx) exp2 exp3, exp_equiv exp1 exp2 -> exp_equiv exp2 exp3 -> exp_equiv exp1 exp3.
+        induction exp1; intros;
+        repeat (try match goal with
+                    | [ H : exp_equiv _ _ |- _ ] => exp_equiv_inversion H
+                    end;
+                eauto).
+    Qed.
 
     Inductive expval : Set :=
     | Num : Z -> expval
@@ -103,155 +218,53 @@ Module Lexical.
     | VCall : forall ctx (rator : expression ctx) rand env ctx' (body : expression (S ctx')) saved_env rand_val val, value_of_rel rator env (Clo body saved_env) -> value_of_rel rand env rand_val -> value_of_rel body (Extend rand_val saved_env) val -> value_of_rel (Call rator rand) env val
     .
 
-    Lemma value_of_rel_diff_inversion : forall ctx (exp1 : expression ctx) exp2 env val, value_of_rel (Diff exp1 exp2) env val -> exists num1 num2, value_of_rel exp1 env (Num num1) /\ value_of_rel exp2 env (Num num2) /\ val = Num (num1 - num2).
-        Hint Resolve eq_nat_dec.
+    Lemma value_of_rel_const_inversion : forall ctx num env val, value_of_rel (Const ctx num) env val -> val = Num (Z.of_nat num).
         intros.
         inversion H.
-        apply inj_pair2_eq_dec in H0; auto.
-        apply inj_pair2_eq_dec in H1; auto.
-        apply inj_pair2_eq_dec in H3; auto.
-        subst.
-        eauto.
+        existT_inversion.
+    Qed.
+
+    Lemma value_of_rel_diff_inversion : forall ctx (exp1 : expression ctx) exp2 env val, value_of_rel (Diff exp1 exp2) env val -> exists num1 num2, value_of_rel exp1 env (Num num1) /\ value_of_rel exp2 env (Num num2) /\ val = Num (num1 - num2).
+        intros.
+        inversion H.
+        existT_inversion.
     Qed.
 
     Lemma value_of_rel_is_zero_inversion : forall ctx (exp1 : expression ctx) env val, value_of_rel (IsZero exp1) env val -> exists num1, value_of_rel exp1 env (Num num1) /\ val = Bool (Z.eqb num1 0).
-        Hint Resolve eq_nat_dec.
         intros.
         inversion H.
-        apply inj_pair2_eq_dec in H0; auto.
-        apply inj_pair2_eq_dec in H2; auto.
-        subst.
-        eauto.
+        existT_inversion.
     Qed.
 
     Lemma value_of_rel_if_inversion : forall ctx (exp1 : expression ctx) exp2 exp3 env val, value_of_rel (If exp1 exp2 exp3) env val -> (value_of_rel exp1 env (Bool true) /\ value_of_rel exp2 env val) \/ (value_of_rel exp1 env (Bool false) /\ value_of_rel exp3 env val).
-        Hint Resolve eq_nat_dec.
         intros.
-        inversion H.
-            left.
-            apply inj_pair2_eq_dec in H0; auto.
-            apply inj_pair2_eq_dec in H1; auto.
-            apply inj_pair2_eq_dec in H5; auto.
-            subst.
-            auto.
-
-            right.
-            apply inj_pair2_eq_dec in H0; auto.
-            apply inj_pair2_eq_dec in H4; auto.
-            apply inj_pair2_eq_dec in H5; auto.
-            subst.
-            auto.
+        inversion H;
+        existT_inversion.
     Qed.
 
     Lemma value_of_rel_let_inversion : forall ctx (exp1 : expression ctx) body env val, value_of_rel (Let exp1 body) env val -> exists val1, value_of_rel exp1 env val1 /\ value_of_rel body (Extend val1 env) val.
-        Hint Resolve eq_nat_dec.
         intros.
         inversion H.
-        apply inj_pair2_eq_dec in H0; auto.
-        apply inj_pair2_eq_dec in H1; auto.
-        apply inj_pair2_eq_dec in H3; auto.
-        subst.
-        eauto.
+        existT_inversion.
     Qed.
 
     Lemma value_of_rel_var_inversion : forall ctx n (pf : n < ctx) env val, value_of_rel (Var pf) env val -> exists (pf : n < ctx), nth env pf = val.
-        Hint Resolve eq_nat_dec.
         intros.
         inversion H.
-        apply inj_pair2_eq_dec in H2; auto.
-        subst.
-        eauto.
+        existT_inversion.
     Qed.
 
     Lemma value_of_rel_proc_inversion : forall ctx (body : expression (S ctx)) env val, value_of_rel (Proc body) env val -> val = Clo body env.
-        Hint Resolve eq_nat_dec.
         intros.
         inversion H.
-        apply inj_pair2_eq_dec in H2; auto.
-        apply inj_pair2_eq_dec in H3; auto.
-        subst.
-        auto.
+        existT_inversion.
     Qed.
 
     Lemma value_of_rel_call_inversion : forall ctx (rator : expression ctx) rand env val, value_of_rel (Call rator rand) env val -> exists ctx' (body : expression (S ctx')) saved_env rand_val, value_of_rel rator env (Clo body saved_env) /\ value_of_rel rand env rand_val /\ value_of_rel body (Extend rand_val saved_env ) val.
-        Hint Resolve eq_nat_dec.
         intros.
         inversion H.
-        apply inj_pair2_eq_dec in H0; auto.
-        apply inj_pair2_eq_dec in H1; auto.
-        apply inj_pair2_eq_dec in H2; auto.
-        subst.
-        exists ctx'.
-        exists body.
-        eauto.
+        existT_inversion.
     Qed.
-
-    Inductive exp_equiv : forall ctx ctx', expression ctx -> expression ctx' -> Prop :=
-    | EQConst : forall ctx ctx' num num', ctx = ctx' -> num = num' -> exp_equiv (Const ctx num) (Const ctx' num')
-    | EQDiff : forall ctx ctx' (exp1 : expression ctx) (exp1' : expression ctx') exp2 exp2', exp_equiv exp1 exp1' -> exp_equiv exp2 exp2' -> exp_equiv (Diff exp1 exp2) (Diff exp1' exp2')
-    | EQIsZero : forall ctx ctx' (exp1 : expression ctx) (exp1' : expression ctx'), exp_equiv exp1 exp1' -> exp_equiv (IsZero exp1) (IsZero exp1')
-    | EQIf : forall ctx ctx' (exp1 : expression ctx) (exp1' : expression ctx') exp2 exp2' exp3 exp3', exp_equiv exp1 exp1' -> exp_equiv exp2 exp2' -> exp_equiv exp3 exp3' -> exp_equiv (If exp1 exp2 exp3) (If exp1' exp2' exp3')
-    | EQLet : forall ctx ctx' (exp1 : expression ctx) (exp1' : expression ctx') body body', exp_equiv exp1 exp1' -> exp_equiv body body' -> exp_equiv (Let exp1 body) (Let exp1' body')
-    | EQVar : forall ctx ctx' n n' (pf : n < ctx) (pf' : n' < ctx'), ctx = ctx' -> n = n' -> exp_equiv (Var pf) (Var pf')
-    | EQProc : forall ctx ctx' (body : expression (S ctx)) (body' : expression (S ctx')), exp_equiv body body' -> exp_equiv (Proc body) (Proc body')
-    | EQCall : forall ctx ctx' (rator : expression ctx) (rator' : expression ctx') rand rand', exp_equiv rator rator' -> exp_equiv rand rand' -> exp_equiv (Call rator rand) (Call rator' rand')
-    .
-
-    Inductive expval_equiv : expval -> expval -> Prop :=
-    | EQNum : forall num num', num = num' -> expval_equiv (Num num) (Num num')
-    | EQBool : forall bool bool', bool = bool' -> expval_equiv (Bool bool) (Bool bool')
-    | EQClo : forall ctx ctx' (body : expression (S ctx)) (body' : expression (S ctx')) saved_env saved_env', exp_equiv body body' -> env_equiv saved_env saved_env' -> expval_equiv (Clo body saved_env) (Clo body' saved_env')
-
-    with env_equiv : forall ctx ctx', environment ctx -> environment ctx' -> Prop :=
-    | EQEmpty : env_equiv Empty Empty
-    | EQExtend : forall ctx ctx' (saved_env : environment ctx) (saved_env' : environment ctx') val val', expval_equiv val val' -> env_equiv saved_env saved_env' -> env_equiv (Extend val saved_env) (Extend val' saved_env')
-    .
-
-    Hint Constructors exp_equiv expval_equiv env_equiv.
-
-    Lemma exp_equiv_refl : forall ctx (exp : expression ctx), exp_equiv exp exp.
-        induction exp; eauto.
-    Qed.
-
-    Lemma exp_equiv_comm : forall ctx ctx' (exp : expression ctx) (exp' : expression ctx'), exp_equiv exp exp' -> exp_equiv exp' exp.
-        intros.
-        induction H; auto.
-    Qed.
-
-    Lemma exp_equiv_tran : forall ctx ctx' ctx'' (exp : expression ctx) (exp' : expression ctx') (exp'' : expression ctx''), exp_equiv exp exp' -> exp_equiv exp' exp'' -> exp_equiv exp exp''.
-    Admitted.
-
-    Lemma exp_equiv_const_inversion : forall ctx (exp : expression ctx) ctx' num', exp_equiv exp (Const ctx' num') -> exists num, ctx = ctx' /\ num = num' /\ exp = Const ctx num.
-        Hint Resolve eq_nat_dec.
-        intros.
-        inversion H.
-        apply inj_pair2_eq_dec in H0; auto.
-        eauto.
-    Qed.
-
-    Lemma exp_equiv_diff_inversion : forall ctx ctx' (exp : expression ctx) (exp1' : expression ctx') exp2', exp_equiv exp (Diff exp1' exp2') -> exists exp1 exp2, exp_equiv exp1 exp1' /\ exp_equiv exp2 exp2' /\ exp = Diff exp1 exp2.
-        Hint Resolve eq_nat_dec.
-        intros.
-        inversion H.
-        apply inj_pair2_eq_dec in H0; auto.
-        apply inj_pair2_eq_dec in H1; auto.
-        apply inj_pair2_eq_dec in H4; auto.
-        subst.
-        eauto.
-    Qed.
-
-    Lemma exp_equiv_var_inversion : forall ctx (exp : expression ctx) ctx' n' (pf' : n' < ctx'), exp_equiv exp (Var pf') -> exists n (pf : n < ctx), ctx = ctx' /\ n = n' /\ exp = Var pf.
-        Hint Resolve eq_nat_dec.
-        intros.
-        inversion H.
-        apply inj_pair2_eq_dec in H0; auto.
-        subst.
-        eauto.
-    Qed.
-
-    Lemma expval_equiv_refl : forall val, expval_equiv val val
-    with env_equiv_refl : forall env, expval_equiv env env.
-    Admitted.
 
     Fixpoint value_of {ctx : nat} (fuel : nat) (exp : expression ctx) : environment ctx -> option expval :=
         match fuel with
@@ -427,36 +440,35 @@ Module Lexical.
 End Lexical.
 
 Module Translation.
-    Definition static_environment := list string.
-    Definition empty_senv : static_environment := nil.
-    Definition extend_senv (x : string) (senv : static_environment) : static_environment := x :: senv.
+    Inductive static_environment : nat -> Set :=
+    | Empty : static_environment O
+    | Extend : forall ctx, string -> static_environment ctx -> static_environment (S ctx)
+    .
 
-    Lemma find_index_lemma1 : forall y (saved_senv : static_environment), O < length (y :: saved_senv).
-        intros.
-        simpl.
-        omega.
-    Qed.
-
-    Lemma find_index_lemma2 : forall n y (saved_senv : static_environment), n < length saved_senv -> (S n) < length (y :: saved_senv).
-        intros.
-        simpl.
-        omega.
-    Qed.
-
-    Fixpoint find_index (x : string) (senv : static_environment) : option { n : nat | n < length senv } :=
+    Fixpoint find_index {ctx : nat} (x : string) (senv : static_environment ctx) : option { n : nat | n < ctx } :=
         match senv with
-        | nil => None
-        | y :: saved_senv =>
+        | Empty => None
+        | Extend _ y saved_senv =>
                 if string_dec x y then
-                    Some (exist _ O (find_index_lemma1 _ _))
+                    Some (exist _ O (lt_0_Sn _))
                 else
                     res <- find_index x saved_senv;
                     match res with
-                    | exist n pf => Some (exist _ (S n) (find_index_lemma2 _ _ pf))
+                    | exist n pf => Some (exist _ (S n) (lt_n_S _ _ pf))
                     end
         end.
 
-    Fixpoint translation_of (exp : Proc.expression) (senv : static_environment) : option (Lexical.expression (length senv)) :=
+    Fixpoint nth {ctx : nat} (n : nat) (senv : static_environment ctx) : n < ctx -> string :=
+        match senv in (static_environment ctx) with
+        | Empty => fun pf => match Lexical.nltz pf with end
+        | Extend _ x saved_senv =>
+                match n with
+                | O => fun _ => x
+                | S n' => fun pf => nth saved_senv (lt_S_n _ _ pf)
+                end
+        end.
+
+    Function translation_of {ctx : nat} (exp : Proc.expression) (senv : static_environment ctx) : option (Lexical.expression ctx) :=
         match exp with
         | Proc.Const num => Some (Lexical.Const _ num)
         | Proc.Diff exp1 exp2 =>
@@ -478,10 +490,10 @@ Module Translation.
                 end
         | Proc.Let var exp1 body =>
                 exp1 <- translation_of exp1 senv;
-                body <- translation_of body (extend_senv var senv);
+                body <- translation_of body (Extend var senv);
                 Some (Lexical.Let exp1 body)
         | Proc.Proc var body =>
-                body <- translation_of body (extend_senv var senv);
+                body <- translation_of body (Extend var senv);
                 Some (Lexical.Proc body)
         | Proc.Call rator rand =>
                 rator <- translation_of rator senv;
@@ -489,56 +501,36 @@ Module Translation.
                 Some (Lexical.Call rator rand)
         end.
 
-    Lemma tranlation_of_const_equation : forall exp senv num, translation_of exp senv = Some (Lexical.Const (length senv) num) -> exp = Proc.Const num.
-        intros.
-        destruct exp; simpl in H;
-        repeat (try match goal with
-                    | [ _ : context[match translation_of ?EXP ?SENV with Some _ => _ | None => _ end] |- _ ] => destruct (translation_of EXP SENV); try discriminate
-                    | [ _ : context[match find_index ?VAR ?SENV with Some _ => _ | None => _ end] |- _ ] => destruct (find_index VAR SENV); try discriminate
-                    | [ H : Some _ = Some _ |- _ ] => inversion H
-                    end;
-                auto).
-        destruct s0.
-        inversion H.
-    Qed.
-
-    Lemma translation_of_diff_equation : forall exp senv exp1' exp2', translation_of exp senv = Some (Lexical.Diff exp1' exp2') -> exists exp1 exp2, translation_of exp1 senv = Some exp1' /\ translation_of exp2 senv = Some exp2' /\ exp = Proc.Diff exp1 exp2.
-        intros.
-        Hint Resolve eq_nat_dec.
-        destruct exp; simpl in H;
+    Ltac translation_of_inversion_finisher :=
         repeat (try match goal with
                     | [ _ : context[match translation_of ?EXP ?SENV with Some _ => _ | None => _ end] |- _ ] => destruct (translation_of EXP SENV) eqn:?; try discriminate
-                    | [ _ : context[match find_index ?VAR ?SENV with Some _ => _ | None => _ end] |- _ ] => destruct (find_index VAR SENV) eqn:?; try discriminate
+                    | [ _ : context[match find_index ?S ?SENV with Some _ => _ | None => _ end] |- _ ] => destruct (find_index S SENV) eqn:?; try discriminate
+                    | [ _ : context[let (_, _) := ?BIND in _] |- _ ] => destruct BIND
                     | [ H : Some _ = Some _ |- _ ] => inversion H; subst; clear H
-                    | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2_eq_dec in H; auto; subst
+                    | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2_eq_dec in H; try apply eq_nat_dec; subst
                     end;
-                eauto).
-        destruct s0.
-        inversion H.
-    Qed.
+                eauto 10).
 
-    Lemma translation_of_var_equation : forall exp senv n (pf : n < length senv), translation_of exp senv = Some (Lexical.Var pf) -> exists var pf', find_index var senv = Some (exist _ n pf')  /\ exp = Proc.Var var.
+    Lemma translation_of_const_inversion : forall ctx exp (senv : static_environment ctx) num, translation_of exp senv = Some (Lexical.Const _ num) -> exp = Proc.Const num.
         intros.
-        Hint Resolve eq_nat_dec.
-        destruct exp; simpl in H;
-        repeat (try match goal with
-                    | [ _ : context[match translation_of ?EXP ?SENV with Some _ => _ | None => _ end] |- _ ] => destruct (translation_of EXP SENV) eqn:?; try discriminate
-                    | [ _ : context[match find_index ?VAR ?SENV with Some _ => _ | None => _ end] |- _ ] => destruct (find_index VAR SENV) eqn:?; try discriminate
-                    | [ H : Some _ = Some _ |- _ ] => inversion H; subst; clear H
-                    | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2_eq_dec in H; auto; subst
-                    end;
-                eauto).
-        destruct s0.
-        inversion H.
-        subst.
-        eauto.
+        rewrite translation_of_equation in H.
+        destruct exp;
+        translation_of_inversion_finisher.
     Qed.
 
-    Fixpoint proc_environment_to_static_environment (env : Proc.environment) : static_environment :=
-        match env with
-        | Proc.Empty => nil
-        | Proc.Extend x _ saved_env => x :: proc_environment_to_static_environment saved_env
-        end.
+    Lemma translation_of_diff_inversion : forall ctx exp (senv : static_environment ctx) exp1' exp2', translation_of exp senv = Some (Lexical.Diff exp1' exp2') -> exists exp1 exp2, exp = Proc.Diff exp1 exp2 /\ translation_of exp1 senv = Some exp1' /\ translation_of exp2 senv = Some exp2'.
+        intros.
+        rewrite translation_of_equation in H.
+        destruct exp;
+        translation_of_inversion_finisher.
+    Qed.
+
+    Lemma translation_of_var_inversion : forall ctx exp (senv : static_environment ctx) n (pf : n < ctx), translation_of exp senv = Some (Lexical.Var pf) -> exists var (pf' : n < ctx), exp = Proc.Var var /\ find_index var senv = Some (exist _ n pf').
+        intros.
+        rewrite translation_of_equation in H.
+        destruct exp;
+        translation_of_inversion_finisher.
+    Qed.
 
     Fixpoint length_proc_environment (env : Proc.environment) : nat :=
         match env with
@@ -546,163 +538,360 @@ Module Translation.
         | Proc.Extend _ _ saved_env => S (length_proc_environment saved_env)
         end.
 
-    Fixpoint translation_of_expval (val : Proc.expval) : option Lexical.expval :=
-        match val with
-        | Proc.Num num => Some (Lexical.Num num)
-        | Proc.Bool bool => Some (Lexical.Bool bool)
-        | Proc.Clo var body saved_env =>
-                body <- translation_of body (extend_senv var (proc_environment_to_static_environment saved_env));
-                saved_env <- translation_of_environment saved_env;
-                Some (Lexical.Clo body saved_env)
-        end
+    Inductive proc_env_static_env_rel : forall ctx, Proc.environment -> static_environment ctx -> Prop :=
+    | PSEmpty : proc_env_static_env_rel (Proc.Empty) Empty
+    | PSExtend : forall ctx x val saved_env (saved_senv : static_environment ctx), proc_env_static_env_rel saved_env saved_senv -> proc_env_static_env_rel (Proc.Extend x val saved_env) (Extend x saved_senv)
+    .
 
-    with translation_of_environment (env : Proc.environment) : option (Lexical.environment (length (proc_environment_to_static_environment env))) :=
-        match env with
-        | Proc.Empty => Some Lexical.Empty
-        | Proc.Extend _ val saved_env =>
-                val <- translation_of_expval val;
-                saved_env <- translation_of_environment saved_env;
-                Some (Lexical.Extend val saved_env)
+    Inductive proc_env_lexical_env_rel : forall ctx, Proc.environment -> Lexical.environment ctx -> Prop :=
+    | PLEmpty : proc_env_lexical_env_rel (Proc.Empty) (Lexical.Empty)
+    | PLExtend : forall ctx saved_env (saved_env' : Lexical.environment ctx) val val' x, proc_env_lexical_env_rel saved_env saved_env' -> proc_val_lexical_val_rel val val' -> proc_env_lexical_env_rel (Proc.Extend x val saved_env) (Lexical.Extend val' saved_env')
+
+    with proc_val_lexical_val_rel : Proc.expval -> Lexical.expval -> Prop :=
+    | PLNum : forall num, proc_val_lexical_val_rel (Proc.Num num) (Lexical.Num num)
+    | PLBool : forall bool, proc_val_lexical_val_rel (Proc.Bool bool) (Lexical.Bool bool)
+    | PLClo : forall ctx saved_env (saved_env' : Lexical.environment ctx) senv body bodyt body' x, proc_env_static_env_rel saved_env senv -> translation_of body (Extend x senv) = Some bodyt -> Lexical.exp_equiv bodyt body' -> proc_env_lexical_env_rel saved_env saved_env' -> proc_val_lexical_val_rel (Proc.Clo x body saved_env) (Lexical.Clo body' saved_env')
+    .
+
+    Hint Constructors proc_env_static_env_rel proc_env_lexical_env_rel proc_val_lexical_val_rel.
+    Hint Constructors Proc.expression Proc.expval Proc.environment Proc.value_of_rel.
+    Hint Constructors Lexical.expression Lexical.expval Lexical.environment Lexical.value_of_rel.
+    Hint Constructors static_environment.
+    Hint Constructors Lexical.exp_equiv.
+    Hint Resolve Lexical.exp_equiv_refl Lexical.exp_equiv_symm Lexical.exp_equiv_trans.
+
+    Fixpoint generate_string (len : nat) : string :=
+        match len with
+        | O => ""
+        | S len' => "+" ++ (generate_string len')
         end.
 
-    Hint Constructors Proc.value_of_rel Lexical.value_of_rel.
-    Hint Constructors Lexical.exp_equiv Lexical.expval_equiv Lexical.env_equiv.
-    Hint Resolve Lexical.exp_equiv_refl Lexical.expval_equiv_refl Lexical.env_equiv_refl.
+    Fixpoint generate (ctx : nat) : static_environment ctx :=
+        match ctx with
+        | O => Empty
+        | S ctx' => Extend (generate_string ctx) (generate ctx')
+        end.
 
-    Lemma translation_of_expval_inversion_num : forall val num, translation_of_expval val = Some (Lexical.Num num) -> val = Proc.Num num.
+    Lemma nth_different_proof : forall ctx (senv : static_environment ctx) n (pf : n < ctx) (pf' : n < ctx), nth senv pf = nth senv pf'.
         intros.
-        destruct val.
-            simpl in H.
-            inversion H.
-            trivial.
-
-            simpl in H.
-            inversion H.
-
-            simpl in H.
-            repeat (
-                match goal with
-                | [ _ : context[translation_of ?EXP ?SENV] |- _ ] => destruct (translation_of EXP SENV); try discriminate
-                | [ _ : context[translation_of_environment ?ENV] |- _ ] => destruct (translation_of_environment ENV); try discriminate
-                end).
+        dependent induction senv.
+            inversion pf.
+            destruct n; eauto.
     Qed.
 
-    Lemma translation_of_expval_inversion_bool : forall val bool, translation_of_expval val = Some (Lexical.Bool bool) -> val = Proc.Bool bool.
+    Lemma find_index_none : forall var ctx (senv : static_environment ctx) n (pf : n < ctx), find_index var senv = None -> nth senv pf <> var.
         intros.
-        destruct val.
-            simpl in H.
-            inversion H.
+        contradict H.
+        dependent induction senv.
+            inversion pf.
+            destruct n.
+                simpl in H.
+                simpl.
+                destruct (string_dec var s); congruence.
 
-            simpl in H.
-            inversion H.
-            trivial.
-
-            simpl in H.
-            repeat (
-                match goal with
-                | [ _ : context[translation_of ?EXP ?SENV] |- _ ] => destruct (translation_of EXP SENV); try discriminate
-                | [ _ : context[translation_of_environment ?ENV] |- _ ] => destruct (translation_of_environment ENV); try discriminate
-                end).
+                simpl in H.
+                apply IHsenv in H.
+                simpl.
+                destruct (string_dec var s); try congruence.
+                destruct (find_index var senv); try congruence.
+                destruct s0.
+                congruence.
     Qed.
 
-    Lemma translation_of_expval_inversion_clo : forall val ctx (body' : Lexical.expression (S ctx)) saved_env', translation_of_expval val = Some (Lexical.Clo body' saved_env') -> exists var body saved_env bodyt saved_envt, val = Proc.Clo var body saved_env /\ translation_of_environment saved_env = Some saved_envt /\ Lexical.env_equiv saved_envt saved_env' /\ translation_of body (extend_senv var (proc_environment_to_static_environment saved_env)) = Some bodyt /\ Lexical.exp_equiv bodyt body'.
+    Lemma nth_generate : forall ctx senv n (pf : n < ctx), senv = generate ctx -> nth senv pf = generate_string (ctx - n).
         intros.
-    Admitted.
+        generalize dependent n.
+        dependent induction senv; intros.
+            inversion pf.
+            destruct n.
+                simpl.
+                simpl in H.
+                inversion H.
+                auto.
 
-    Lemma var_in_environment : forall env s env' x (pf : x < length (proc_environment_to_static_environment env)) (pf' : x < length (proc_environment_to_static_environment env)) val', Lexical.nth env' pf = val' -> find_index s (proc_environment_to_static_environment env) = Some (exist _ x pf') -> translation_of_environment env = Some env' -> exists val valt, translation_of_expval val = Some valt /\ Lexical.expval_equiv valt val' /\ Proc.assoc_error s env = Some val.
+                simpl in H.
+                inversion H.
+                apply inj_pair2_eq_dec in H2; try apply eq_nat_dec.
+                apply IHsenv with (n := n) (pf := lt_S_n _ _ pf) in H2.
+                simpl.
+                auto.
+    Qed.
+
+    Lemma length_generate : forall n, String.length (generate_string n) = n.
         intros.
-    Admitted.
+        induction n.
+            auto.
+            simpl.
+            omega.
+    Qed.
 
-    Lemma translation_of_soundness_generalized : forall exp env ctx' env' (exp' : Lexical.expression ctx') val' expt envt, translation_of exp (proc_environment_to_static_environment env) = Some expt -> Lexical.exp_equiv expt exp' -> translation_of_environment env = Some envt -> Lexical.env_equiv envt env' -> Lexical.value_of_rel exp' env' val' -> exists val valt, translation_of_expval val = Some valt /\ Lexical.expval_equiv valt val' /\ Proc.value_of_rel exp env val.
+    Lemma length_equal : forall s1 s2, s1 = s2 -> String.length s1 = String.length s2.
+        intros.
+        induction s1; induction s2; congruence.
+    Qed.
+
+    Lemma find_index_some : forall ctx n (pf : n < ctx) senv, senv = generate ctx -> exists pf', find_index (nth senv pf) senv = Some (exist _ n pf').
+        intros.
+        generalize dependent n.
+        dependent induction senv; intros.
+            inversion pf.
+            destruct n.
+                simpl.
+                destruct (string_dec s s).
+                    eauto.
+                    congruence.
+            simpl in H.
+            inversion H.
+            apply inj_pair2_eq_dec in H2; try apply eq_nat_dec.
+            assert (H3 := H2).
+            apply IHsenv with (n := n) (pf := lt_S_n _ _ pf) in H2.
+            destruct H2.
+            exists (lt_n_S _ _ x).
+            simpl.
+            destruct (string_dec (nth senv (lt_S_n n ctx pf))).
+                assert (T := nth_generate (lt_S_n n ctx pf) H3).
+                rewrite -> T in e.
+                apply length_equal in e.
+                simpl in e.
+                assert (String.length (generate_string (ctx - n)) = ctx - n). apply length_generate.
+                assert (String.length (generate_string ctx) = ctx). apply length_generate.
+                rewrite -> H2 in e.
+                rewrite -> H4 in e.
+                contradict e.
+                omega.
+
+                rewrite -> H0.
+                auto.
+    Qed.
+
+    Lemma proc_exp_construction : forall ctx (exp' : Lexical.expression ctx) (senv : static_environment ctx), senv = generate ctx -> exists exp expt, translation_of exp senv = Some expt /\ Lexical.exp_equiv expt exp'.
+        intros.
+        dependent induction exp'.
+            exists (Proc.Const n).
+            exists (Lexical.Const _ n).
+            auto.
+
+            assert (T1 := IHexp'1 senv).
+            assert (Q1 := H).
+            apply T1 in Q1.
+            destruct Q1.
+            destruct H0.
+            destruct H0.
+            assert (T2 := IHexp'2 senv).
+            assert (Q2 := H).
+            apply T2 in Q2.
+            destruct Q2.
+            destruct H2.
+            destruct H2.
+            exists (Proc.Diff x x1).
+            exists (Lexical.Diff x0 x2).
+            simpl.
+            rewrite -> H0.
+            rewrite -> H2.
+            auto.
+
+            assert (T1 := IHexp' senv).
+            assert (Q1 := H).
+            apply T1 in Q1.
+            destruct Q1.
+            destruct H0.
+            destruct H0.
+            exists (Proc.IsZero x).
+            exists (Lexical.IsZero x0).
+            simpl.
+            rewrite -> H0.
+            auto.
+
+            assert (T1 := IHexp'1 senv).
+            assert (Q1 := H).
+            apply T1 in Q1.
+            destruct Q1.
+            destruct H0.
+            destruct H0.
+            assert (T2 := IHexp'2 senv).
+            assert (Q2 := H).
+            apply T2 in Q2.
+            destruct Q2.
+            destruct H2.
+            destruct H2.
+            assert (T3 := IHexp'3 senv).
+            assert (Q3 := H).
+            apply T3 in Q3.
+            destruct Q3.
+            destruct H4.
+            destruct H4.
+            exists (Proc.If x x1 x3).
+            exists (Lexical.If x0 x2 x4).
+            simpl.
+            rewrite -> H0.
+            rewrite -> H2.
+            rewrite -> H4.
+            auto.
+
+            exists (Proc.Var (nth senv l)).
+            assert (T := find_index_some l H).
+            destruct T.
+            exists (Lexical.Var x).
+            simpl.
+            rewrite -> H0.
+            auto.
+
+            assert (T1 := IHexp'1 senv).
+            assert (Q1 := H).
+            apply T1 in Q1.
+            destruct Q1.
+            destruct H0.
+            destruct H0.
+            assert (T2 := IHexp'2 (Extend (generate_string (S ctx)) senv)).
+            assert (Extend (generate_string (S ctx)) senv = generate (S ctx)).
+                simpl.
+                rewrite -> H.
+                auto.
+            apply T2 in H2.
+            destruct H2.
+            destruct H2.
+            destruct H2.
+            exists (Proc.Let (generate_string (S ctx)) x x1).
+            exists (Lexical.Let x0 x2).
+            rewrite translation_of_equation.
+            rewrite -> H0.
+            rewrite -> H2.
+            auto.
+
+            assert (T1 := IHexp' (Extend (generate_string (S ctx)) senv)).
+            assert (Extend (generate_string (S ctx)) senv = generate (S ctx)).
+                simpl.
+                rewrite -> H.
+                auto.
+            apply T1 in H0.
+            destruct H0.
+            destruct H0.
+            destruct H0.
+            exists (Proc.Proc (generate_string (S ctx)) x).
+            exists (Lexical.Proc x0).
+            rewrite translation_of_equation.
+            rewrite -> H0.
+            auto.
+
+            assert (T1 := IHexp'1 senv).
+            assert (Q1 := H).
+            apply T1 in Q1.
+            destruct Q1.
+            destruct H0.
+            destruct H0.
+            assert (T2 := IHexp'2 senv).
+            assert (Q2 := H).
+            apply T2 in Q2.
+            destruct Q2.
+            destruct H2.
+            destruct H2.
+            exists (Proc.Call x x1).
+            exists (Lexical.Call x0 x2).
+            simpl.
+            rewrite -> H0.
+            rewrite -> H2.
+            auto.
+    Qed.
+
+    Lemma proc_val_construction : forall val', exists val, proc_val_lexical_val_rel val val'.
+        intros.
+        apply (Lexical.expval_mut
+            (fun (val' : Lexical.expval) => exists val,
+                proc_val_lexical_val_rel val val')
+            (fun {ctx : nat} (env' : Lexical.environment ctx) => forall (senv : static_environment ctx), exists env,
+                proc_env_static_env_rel env senv /\ proc_env_lexical_env_rel env env')); intros; eauto.
+
+        assert (T := H (generate ctx)).
+        destruct T.
+        destruct H0.
+        assert (Extend (generate_string (S ctx)) (generate ctx) = generate (S ctx)).
+            simpl.
+            auto.
+        assert (T := proc_exp_construction e H2).
+        destruct T.
+        destruct H3.
+        destruct H3.
+        exists (Proc.Clo (generate_string (S ctx)) x0 x).
+        eauto.
+
+        dependent destruction senv.
+        eauto.
+
+        dependent destruction senv.
+        specialize (H0 senv).
+        destruct H0.
+        destruct H0.
+        destruct H.
+        eauto.
+    Qed.
+
+    Lemma proc_env_construction : forall ctx (env' : Lexical.environment ctx) (senv : static_environment ctx), exists env, proc_env_static_env_rel env senv /\ proc_env_lexical_env_rel env env'.
+        dependent induction env'; intros.
+            dependent destruction senv.
+            eauto.
+
+            dependent destruction senv.
+            specialize (IHenv' senv).
+            destruct IHenv'.
+            destruct H.
+            assert (T := proc_val_construction e).
+            destruct T.
+            eauto.
+    Qed.
+
+    Hint Resolve proc_val_construction proc_env_construction proc_exp_construction.
+
+    Lemma translation_of_soundness_generalized : forall ctx exp (senv : static_environment ctx) exp' env' val' env, translation_of exp senv = Some exp' -> Lexical.value_of_rel exp' env' val' -> proc_env_static_env_rel env senv -> proc_env_lexical_env_rel env env' -> exists val, proc_val_lexical_val_rel val val' /\ Proc.value_of_rel exp env val.
         intros.
         generalize dependent exp.
+        generalize dependent senv.
         generalize dependent env.
-        induction H3; intros.
+        dependent induction H0; intros.
+            apply translation_of_const_inversion in H.
+            subst.
+            eauto.
 
-        apply Lexical.exp_equiv_const_inversion in H0.
-        destruct H0.
-        destruct H0.
-        destruct H3.
-        subst.
-        apply tranlation_of_const_equation in H.
-        subst.
-        exists (Proc.Num (Z.of_nat num)).
-        exists (Lexical.Num (Z.of_nat num)).
-        auto.
+            apply translation_of_diff_inversion in H.
+            destruct H.
+            destruct H.
+            destruct H.
+            destruct H0.
+            subst.
+            assert (Q1 := H2).
+            apply IHvalue_of_rel1 with (senv := senv) (exp := x) in Q1; auto.
+            destruct Q1.
+            destruct H.
+            assert (Q2 := H2).
+            apply IHvalue_of_rel2 with (senv := senv) (exp := x0) in Q2; auto.
+            destruct Q2.
+            destruct H5.
+            inversion H.
+            inversion H5.
+            subst.
+            eauto.
 
-        apply Lexical.exp_equiv_diff_inversion in H0.
-        destruct H0.
-        destruct H0.
-        destruct H0.
-        destruct H3.
-        subst.
-        apply translation_of_diff_equation in H.
-        destruct H.
-        destruct H.
-        destruct H.
-        destruct H4.
-        subst.
-        assert (T1 := IHvalue_of_rel1 env0 x envt).
-        eapply T1 in H0; eauto.
-        destruct H0.
-        destruct H0.
-        destruct H0.
-        destruct H5.
-        subst.
-        inversion H5.
-        subst.
-        apply translation_of_expval_inversion_num in H0.
-        subst.
-        assert (T2 := IHvalue_of_rel2 env0 x0 envt).
-        eapply T2 in H3; eauto.
-        destruct H3.
-        destruct H0.
-        destruct H0.
-        destruct H3.
-        subst.
-        inversion H3.
-        subst.
-        apply translation_of_expval_inversion_num in H0.
-        subst.
-        exists (Proc.Num (num1 - num2)).
-        exists (Lexical.Num (num1 - num2)).
-        auto.
+            admit.
 
-        admit.
+            admit.
 
-        admit.
+            admit.
 
-        admit.
-
-        apply Lexical.exp_equiv_var_inversion in H0.
-        destruct H0.
-        destruct H0.
-        destruct H0.
-        destruct H4.
-        subst.
-        apply translation_of_var_equation in H3.
-        destruct H3.
-        destruct H.
-        destruct H.
-        subst.
-        assert (Lexical.nth envt pf = Lexical.nth envt pf).
-        trivial.
-        apply var_in_environment with (s := x) (pf' := x1) in H0; auto.
-        admit.
-
-        admit.
-
-        admit.
+            apply translation_of_var_inversion in H0.
+            destruct H0.
+            destruct H0.
+            destruct H0.
+            subst.
+            admit.
     Admitted.
 
-    Theorem translation_of_soundness : forall exp exp' val', translation_of exp empty_senv = Some exp' -> Lexical.value_of_rel exp' Lexical.Empty val' -> exists val valt, translation_of_expval val = Some valt /\ Lexical.expval_equiv valt val' /\ Proc.value_of_rel exp Proc.Empty val.
-        intros; eapply translation_of_soundness_generalized; eauto; auto.
+    Theorem translation_of_soundness : forall exp exp' val', translation_of exp Empty = Some exp' -> Lexical.value_of_rel exp' Lexical.Empty val' -> exists val, proc_val_lexical_val_rel val val' /\ Proc.value_of_rel exp Proc.Empty val.
+        intros; eapply translation_of_soundness_generalized; eauto.
     Qed.
 
-    Lemma translation_of_completeness_generalized : forall env env' exp exp' val val', translation_of exp (proc_environment_to_static_environment env) = Some exp' -> translation_of_environment env = Some env' -> translation_of_expval val = Some val' -> Proc.value_of_rel exp env val -> Lexical.value_of_rel exp' env' val'.
+    Lemma translation_of_completeness_generalized : forall ctx (senv : static_environment ctx) env env' exp exp' val val', translation_of exp senv = Some exp' ->  proc_val_lexical_val_rel val val' -> proc_env_static_env_rel env senv -> proc_env_lexical_env_rel env env' -> Proc.value_of_rel exp env val -> Lexical.value_of_rel exp' env' val'.
     Admitted.
 
-    Theorem translation_of_completeness : forall exp exp' val val', translation_of exp (proc_environment_to_static_environment Proc.Empty) = Some exp' -> translation_of_expval val = Some val' -> Proc.value_of_rel exp Proc.Empty val -> Lexical.value_of_rel exp' Lexical.Empty val'.
-        intros; eapply translation_of_completeness_generalized; eauto; auto.
+    Theorem translation_of_completeness : forall exp exp' val val', translation_of exp Empty = Some exp' -> proc_val_lexical_val_rel val val' -> Proc.value_of_rel exp Proc.Empty val -> Lexical.value_of_rel exp' Lexical.Empty val'.
+        intros; eapply translation_of_completeness_generalized; eauto.
     Qed.
 End Translation.
