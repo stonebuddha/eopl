@@ -59,15 +59,46 @@ Module Proc.
         end.
 
     Inductive value_of_rel : expression -> environment -> expval -> Prop :=
-    | VConst : forall num env, value_of_rel (Const num) env (Num (Z.of_nat num))
-    | VDiff : forall exp1 exp2 num1 num2 env, value_of_rel exp1 env (Num num1) -> value_of_rel exp2 env (Num num2) -> value_of_rel (Diff exp1 exp2) env (Num (num1 - num2))
-    | VIsZero : forall exp1 num1 env, value_of_rel exp1 env (Num num1) -> value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
-    | VIfTrue : forall exp1 exp2 exp3 val2 env, value_of_rel exp1 env (Bool true) -> value_of_rel exp2 env val2 -> value_of_rel (If exp1 exp2 exp3) env val2
-    | VIfFalse : forall exp1 exp2 exp3 val3 env, value_of_rel exp1 env (Bool false) -> value_of_rel exp3 env val3 -> value_of_rel (If exp1 exp2 exp3) env val3
-    | VVar : forall var env val, assoc_error var env = Some val -> value_of_rel (Var var) env val
-    | VLet : forall var exp1 body env val1 valb, value_of_rel exp1 env val1 -> value_of_rel body (Extend var val1 env) valb -> value_of_rel (Let var exp1 body) env valb
-    | VProc : forall var body env, value_of_rel (Proc var body) env (Clo var body env)
-    | VCall : forall rator rand env var body saved_env rand_val valb, value_of_rel rator env (Clo var body saved_env) -> value_of_rel rand env rand_val -> value_of_rel body (Extend var rand_val saved_env) valb -> value_of_rel (Call rator rand) env valb
+    | VConst :
+            forall num env,
+            value_of_rel (Const num) env (Num (Z.of_nat num))
+    | VDiff :
+            forall exp1 exp2 num1 num2 env,
+            value_of_rel exp1 env (Num num1) ->
+            value_of_rel exp2 env (Num num2) ->
+            value_of_rel (Diff exp1 exp2) env (Num (num1 - num2))
+    | VIsZero :
+            forall exp1 num1 env,
+            value_of_rel exp1 env (Num num1) ->
+            value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
+    | VIfTrue :
+            forall exp1 exp2 exp3 val2 env,
+            value_of_rel exp1 env (Bool true) ->
+            value_of_rel exp2 env val2 ->
+            value_of_rel (If exp1 exp2 exp3) env val2
+    | VIfFalse :
+            forall exp1 exp2 exp3 val3 env,
+            value_of_rel exp1 env (Bool false) ->
+            value_of_rel exp3 env val3 ->
+            value_of_rel (If exp1 exp2 exp3) env val3
+    | VVar :
+            forall var env val,
+            assoc_error var env = Some val ->
+            value_of_rel (Var var) env val
+    | VLet :
+            forall var exp1 body env val1 valb,
+            value_of_rel exp1 env val1 ->
+            value_of_rel body (Extend var val1 env) valb ->
+            value_of_rel (Let var exp1 body) env valb
+    | VProc :
+            forall var body env,
+            value_of_rel (Proc var body) env (Clo var body env)
+    | VCall :
+            forall rator rand env var body saved_env rand_val valb,
+            value_of_rel rator env (Clo var body saved_env) ->
+            value_of_rel rand env rand_val ->
+            value_of_rel body (Extend var rand_val saved_env) valb ->
+            value_of_rel (Call rator rand) env valb
     .
 End Proc.
 
@@ -93,9 +124,6 @@ Module Lexical.
     | Extend : forall ctx, expval -> environment ctx -> environment (S ctx)
     .
 
-    Scheme expval_mut := Induction for expval Sort Prop
-    with environment_mut := Induction for environment Sort Prop.
-
     Lemma nltz : forall n, n < O -> False.
         intro; omega.
     Qed.
@@ -111,15 +139,46 @@ Module Lexical.
         end.
 
     Inductive value_of_rel: forall ctx, expression ctx -> environment ctx -> expval -> Prop :=
-    | VConst : forall ctx num env, value_of_rel (Const ctx num) env (Num (Z.of_nat num))
-    | VDiff : forall ctx (exp1 : expression ctx) exp2 num1 num2 env, value_of_rel exp1 env (Num num1) -> value_of_rel exp2 env (Num num2) -> value_of_rel (Diff exp1 exp2) env (Num (num1 - num2))
-    | VIsZero : forall ctx (exp1 : expression ctx) num1 env, value_of_rel exp1 env (Num num1) -> value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
-    | VIfTrue : forall ctx (exp1 : expression ctx) exp2 exp3 val2 env, value_of_rel exp1 env (Bool true) -> value_of_rel exp2 env val2 -> value_of_rel (If exp1 exp2 exp3) env val2
-    | VIfFalse : forall ctx (exp1 : expression ctx) exp2 exp3 val3 env, value_of_rel exp1 env (Bool false) -> value_of_rel exp3 env val3 -> value_of_rel (If exp1 exp2 exp3) env val3
-    | VVar : forall ctx n (pf : n < ctx) env val, nth env pf = val -> value_of_rel (Var pf) env val
-    | VLet : forall ctx (exp1 : expression ctx) body env val1 val, value_of_rel exp1 env val1 -> value_of_rel body (Extend val1 env) val -> value_of_rel (Let exp1 body) env val
-    | VProc : forall ctx (body : expression (S ctx)) env, value_of_rel (Proc body) env (Clo body env)
-    | VCall : forall ctx (rator : expression ctx) rand env ctx' (body : expression (S ctx')) saved_env rand_val val, value_of_rel rator env (Clo body saved_env) -> value_of_rel rand env rand_val -> value_of_rel body (Extend rand_val saved_env) val -> value_of_rel (Call rator rand) env val
+    | VConst :
+            forall ctx num env,
+            value_of_rel (Const ctx num) env (Num (Z.of_nat num))
+    | VDiff :
+            forall ctx (exp1 : expression ctx) exp2 num1 num2 env,
+            value_of_rel exp1 env (Num num1) ->
+            value_of_rel exp2 env (Num num2) ->
+            value_of_rel (Diff exp1 exp2) env (Num (num1 - num2))
+    | VIsZero :
+            forall ctx (exp1 : expression ctx) num1 env,
+            value_of_rel exp1 env (Num num1) ->
+            value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
+    | VIfTrue :
+            forall ctx (exp1 : expression ctx) exp2 exp3 val2 env,
+            value_of_rel exp1 env (Bool true) ->
+            value_of_rel exp2 env val2 ->
+            value_of_rel (If exp1 exp2 exp3) env val2
+    | VIfFalse :
+            forall ctx (exp1 : expression ctx) exp2 exp3 val3 env,
+            value_of_rel exp1 env (Bool false) ->
+            value_of_rel exp3 env val3 ->
+            value_of_rel (If exp1 exp2 exp3) env val3
+    | VVar :
+            forall ctx n (pf : n < ctx) env val,
+            nth env pf = val ->
+            value_of_rel (Var pf) env val
+    | VLet :
+            forall ctx (exp1 : expression ctx) body env val1 val,
+            value_of_rel exp1 env val1 ->
+            value_of_rel body (Extend val1 env) val ->
+            value_of_rel (Let exp1 body) env val
+    | VProc :
+            forall ctx (body : expression (S ctx)) env,
+            value_of_rel (Proc body) env (Clo body env)
+    | VCall :
+            forall ctx (rator : expression ctx) rand env ctx' (body : expression (S ctx')) saved_env rand_val val,
+            value_of_rel rator env (Clo body saved_env) ->
+            value_of_rel rand env rand_val ->
+            value_of_rel body (Extend rand_val saved_env) val ->
+            value_of_rel (Call rator rand) env val
     .
 
     Lemma value_of_rel_const_inversion :
@@ -612,17 +671,33 @@ Module Translation.
 
     Inductive proc_env_static_env_rel : forall ctx, Proc.environment -> static_environment ctx -> Prop :=
     | PSEmpty : proc_env_static_env_rel (Proc.Empty) Empty
-    | PSExtend : forall ctx x val saved_env (saved_senv : static_environment ctx), proc_env_static_env_rel saved_env saved_senv -> proc_env_static_env_rel (Proc.Extend x val saved_env) (Extend x saved_senv)
+    | PSExtend :
+            forall ctx x val saved_env (saved_senv : static_environment ctx),
+            proc_env_static_env_rel saved_env saved_senv ->
+            proc_env_static_env_rel (Proc.Extend x val saved_env) (Extend x saved_senv)
     .
 
     Inductive proc_env_lexical_env_rel : forall ctx, Proc.environment -> Lexical.environment ctx -> Prop :=
     | PLEmpty : proc_env_lexical_env_rel (Proc.Empty) (Lexical.Empty)
-    | PLExtend : forall ctx saved_env (saved_env' : Lexical.environment ctx) val val' x, proc_env_lexical_env_rel saved_env saved_env' -> proc_val_lexical_val_rel val val' -> proc_env_lexical_env_rel (Proc.Extend x val saved_env) (Lexical.Extend val' saved_env')
+    | PLExtend :
+            forall ctx saved_env (saved_env' : Lexical.environment ctx) val val' x,
+            proc_env_lexical_env_rel saved_env saved_env' ->
+            proc_val_lexical_val_rel val val' ->
+            proc_env_lexical_env_rel (Proc.Extend x val saved_env) (Lexical.Extend val' saved_env')
 
     with proc_val_lexical_val_rel : Proc.expval -> Lexical.expval -> Prop :=
-    | PLNum : forall num, proc_val_lexical_val_rel (Proc.Num num) (Lexical.Num num)
-    | PLBool : forall bool, proc_val_lexical_val_rel (Proc.Bool bool) (Lexical.Bool bool)
-    | PLClo : forall ctx saved_env (saved_env' : Lexical.environment ctx) senv body (*bodyt*) body' x, proc_env_static_env_rel saved_env senv -> translation_of body (Extend x senv) = Some body' (*-> Lexical.exp_equiv bodyt body'*) -> proc_env_lexical_env_rel saved_env saved_env' -> proc_val_lexical_val_rel (Proc.Clo x body saved_env) (Lexical.Clo body' saved_env')
+    | PLNum :
+            forall num,
+            proc_val_lexical_val_rel (Proc.Num num) (Lexical.Num num)
+    | PLBool :
+            forall bool,
+            proc_val_lexical_val_rel (Proc.Bool bool) (Lexical.Bool bool)
+    | PLClo :
+            forall ctx saved_env (saved_env' : Lexical.environment ctx) senv body body' x,
+            proc_env_static_env_rel saved_env senv ->
+            translation_of body (Extend x senv) = Some body' ->
+            proc_env_lexical_env_rel saved_env saved_env' ->
+            proc_val_lexical_val_rel (Proc.Clo x body saved_env) (Lexical.Clo body' saved_env')
     .
 
     Hint Constructors proc_env_static_env_rel proc_env_lexical_env_rel proc_val_lexical_val_rel.

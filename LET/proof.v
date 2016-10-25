@@ -21,13 +21,37 @@ Definition extend_env (x : string) (v : expval) (env : environment) : environmen
     fun y => if string_dec x y then Some v else env y.
 
 Inductive value_of_rel : expression -> environment -> expval -> Prop :=
-| VConst : forall num env, value_of_rel (Const num) env (Num (Z.of_nat num))
-| VDiff : forall exp1 exp2 num1 num2 env, value_of_rel exp1 env (Num num1) -> value_of_rel exp2 env (Num num2) -> value_of_rel (Diff exp1 exp2) env (Num (num1 - num2))
-| VIsZero : forall exp1 num1 env, value_of_rel exp1 env (Num num1) -> value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
-| VIfTrue : forall exp1 exp2 exp3 val2 env, value_of_rel exp1 env (Bool true) -> value_of_rel exp2 env val2 -> value_of_rel (If exp1 exp2 exp3) env val2
-| VIfFalse : forall exp1 exp2 exp3 val3 env, value_of_rel exp1 env (Bool false) -> value_of_rel exp3 env val3 -> value_of_rel (If exp1 exp2 exp3) env val3
-| VVar : forall var env val, env var = Some val -> value_of_rel (Var var) env val
-| VLet : forall var exp1 body env val1 valb, value_of_rel exp1 env val1 -> value_of_rel body (extend_env var val1 env) valb -> value_of_rel (Let var exp1 body) env valb
+| VConst :
+        forall num env,
+        value_of_rel (Const num) env (Num (Z.of_nat num))
+| VDiff :
+        forall exp1 exp2 num1 num2 env,
+        value_of_rel exp1 env (Num num1) ->
+        value_of_rel exp2 env (Num num2) ->
+        value_of_rel (Diff exp1 exp2) env (Num (num1 - num2))
+| VIsZero :
+        forall exp1 num1 env,
+        value_of_rel exp1 env (Num num1) ->
+        value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
+| VIfTrue :
+        forall exp1 exp2 exp3 val2 env,
+        value_of_rel exp1 env (Bool true) ->
+        value_of_rel exp2 env val2 ->
+        value_of_rel (If exp1 exp2 exp3) env val2
+| VIfFalse :
+        forall exp1 exp2 exp3 val3 env,
+        value_of_rel exp1 env (Bool false) ->
+        value_of_rel exp3 env val3 ->
+        value_of_rel (If exp1 exp2 exp3) env val3
+| VVar :
+        forall var env val,
+        env var = Some val ->
+        value_of_rel (Var var) env val
+| VLet :
+        forall var exp1 body env val1 valb,
+        value_of_rel exp1 env val1 ->
+        value_of_rel body (extend_env var val1 env) valb ->
+        value_of_rel (Let var exp1 body) env valb
 .
 
 Notation "x <- e1 ; e2" :=
@@ -66,13 +90,13 @@ Fixpoint value_of (exp : expression) (env : environment) : option expval :=
             value_of body (extend_env var val1 env)
     end.
 
-Lemma option_eq {T : Type} (p q : T) : Some p = Some q -> p = q.
-    congruence.
-Qed.
-
 Hint Constructors value_of_rel.
 
-Theorem value_of_soundness : forall exp env val, value_of exp env = Some val -> value_of_rel exp env val.
+Theorem value_of_soundness :
+    forall exp env val,
+    value_of exp env = Some val ->
+    value_of_rel exp env val.
+Proof.
     induction exp; intros;
     match goal with
     | [ H : value_of _ _ = _ |- _ ] => simpl in H
@@ -81,12 +105,16 @@ Theorem value_of_soundness : forall exp env val, value_of exp env = Some val -> 
                 | [ _ : context[match value_of ?EXP ?ENV with Some _ => _ | None => _ end ] |- _ ] => destruct (value_of EXP ENV) eqn:?; try discriminate
                 | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ end ] |- _ ] => destruct VAL; try discriminate
                 | [ _ : context[if ?B then _ else _] |- _ ] => destruct b
-                | [ H : Some _ = Some _ |- _ ] => apply option_eq in H; try (rewrite <- H)
+                | [ H : Some _ = Some _ |- _ ] => inversion H; subst; clear H
                 end;
             eauto).
 Qed.
 
-Theorem value_of_completeness : forall exp env val, value_of_rel exp env val -> value_of exp env = Some val.
+Theorem value_of_completeness :
+    forall exp env val,
+    value_of_rel exp env val ->
+    value_of exp env = Some val.
+Proof.
     intros.
     induction 0; simpl;
     repeat (try match goal with
@@ -95,7 +123,11 @@ Theorem value_of_completeness : forall exp env val, value_of_rel exp env val -> 
             eauto).
 Qed.
 
-Theorem value_of_correctness : forall exp env val, value_of exp env = Some val <-> value_of_rel exp env val.
+Theorem value_of_correctness :
+    forall exp env val,
+    value_of exp env = Some val <->
+    value_of_rel exp env val.
+Proof.
     Hint Resolve value_of_soundness value_of_completeness.
     intros; split; auto.
 Qed.

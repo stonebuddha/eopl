@@ -31,16 +31,50 @@ CoFixpoint extend_env_rec (p_name : string) (b_var : string) (p_body : expressio
     fun y => if string_dec p_name y then Some (Clo b_var p_body (extend_env_rec p_name b_var p_body env)) else env y.
 
 Inductive value_of_rel : expression -> environment -> expval -> Prop :=
-| VConst : forall num env, value_of_rel (Const num) env (Num (Z.of_nat num))
-| VDiff : forall exp1 exp2 num1 num2 env, value_of_rel exp1 env (Num num1) -> value_of_rel exp2 env (Num num2) -> value_of_rel (Diff exp1 exp2) env (Num (num1 - num2))
-| VIsZero : forall exp1 num1 env, value_of_rel exp1 env (Num num1) -> value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
-| VIfTrue : forall exp1 exp2 exp3 val2 env, value_of_rel exp1 env (Bool true) -> value_of_rel exp2 env val2 -> value_of_rel (If exp1 exp2 exp3) env val2
-| VIfFalse : forall exp1 exp2 exp3 val3 env, value_of_rel exp1 env (Bool false) -> value_of_rel exp3 env val3 -> value_of_rel (If exp1 exp2 exp3) env val3
-| VVar : forall var env val, env var = Some val -> value_of_rel (Var var) env val
-| VLet : forall var exp1 body env val1 valb, value_of_rel exp1 env val1 -> value_of_rel body (extend_env var val1 env) valb -> value_of_rel (Let var exp1 body) env valb
-| VProc : forall var body env, value_of_rel (Proc var body) env (Clo var body env)
-| VCall : forall rator rand env var body saved_env rand_val valb, value_of_rel rator env (Clo var body saved_env) -> value_of_rel rand env rand_val -> value_of_rel body (extend_env var rand_val saved_env) valb -> value_of_rel (Call rator rand) env valb
-| VLetrec : forall p_name b_var p_body letrec_body env valb, value_of_rel letrec_body (extend_env_rec p_name b_var p_body env) valb -> value_of_rel (Letrec p_name b_var p_body letrec_body) env valb
+| VConst :
+        forall num env,
+        value_of_rel (Const num) env (Num (Z.of_nat num))
+| VDiff :
+        forall exp1 exp2 num1 num2 env,
+        value_of_rel exp1 env (Num num1) ->
+        value_of_rel exp2 env (Num num2) ->
+        value_of_rel (Diff exp1 exp2) env (Num (num1 - num2))
+| VIsZero :
+        forall exp1 num1 env,
+        value_of_rel exp1 env (Num num1) ->
+        value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
+| VIfTrue :
+        forall exp1 exp2 exp3 val2 env,
+        value_of_rel exp1 env (Bool true) ->
+        value_of_rel exp2 env val2 ->
+        value_of_rel (If exp1 exp2 exp3) env val2
+| VIfFalse :
+        forall exp1 exp2 exp3 val3 env,
+        value_of_rel exp1 env (Bool false) ->
+        value_of_rel exp3 env val3 ->
+        value_of_rel (If exp1 exp2 exp3) env val3
+| VVar :
+        forall var env val,
+        env var = Some val ->
+        value_of_rel (Var var) env val
+| VLet :
+        forall var exp1 body env val1 valb,
+        value_of_rel exp1 env val1 ->
+        value_of_rel body (extend_env var val1 env) valb ->
+        value_of_rel (Let var exp1 body) env valb
+| VProc :
+        forall var body env,
+        value_of_rel (Proc var body) env (Clo var body env)
+| VCall :
+        forall rator rand env var body saved_env rand_val valb,
+        value_of_rel rator env (Clo var body saved_env) ->
+        value_of_rel rand env rand_val ->
+        value_of_rel body (extend_env var rand_val saved_env) valb ->
+        value_of_rel (Call rator rand) env valb
+| VLetrec :
+        forall p_name b_var p_body letrec_body env valb,
+        value_of_rel letrec_body (extend_env_rec p_name b_var p_body env) valb ->
+        value_of_rel (Letrec p_name b_var p_body letrec_body) env valb
 .
 
 Notation "x <- e1 ; e2" :=
@@ -94,13 +128,13 @@ Function value_of (exp : expression) (env : environment) (fuel : nat) : option_e
             end
     end.
 
-Lemma option_eq (p q : expval) : Some p = Some q -> p = q.
-    congruence.
-Qed.
-
 Hint Constructors value_of_rel.
 
-Theorem value_of_soundness : forall exp env val, (exists fuel, value_of exp env fuel = Some val) -> value_of_rel exp env val.
+Theorem value_of_soundness :
+    forall exp env val,
+    (exists fuel, value_of exp env fuel = Some val) ->
+    value_of_rel exp env val.
+Proof.
     intros.
     destruct 0 as [ fuel ? ].
     generalize dependent val.
@@ -114,12 +148,16 @@ Theorem value_of_soundness : forall exp env val, (exists fuel, value_of exp env 
                 | [ _ : context[match value_of ?EXP ?ENV ?FUEL with Some _ => _ | None => _ end] |- _ ] => destruct (value_of EXP ENV FUEL) eqn:?; try discriminate
                 | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ _ => _ end] |- _ ] => destruct VAL; try discriminate
                 | [ _ : context[if ?B then _ else _] |- _ ] => destruct B
-                | [ H : Some _ = Some _ |- _ ] => apply option_eq in H; try (rewrite <- H)
+                | [ H : Some _ = Some _ |- _ ] => inversion H; subst; clear H
                 end;
             eauto).
 Qed.
 
-Lemma fuel_incr : forall fuel exp env val, value_of exp env fuel = Some val -> value_of exp env (S fuel) = Some val.
+Lemma fuel_incr :
+    forall fuel exp env val,
+    value_of exp env fuel = Some val ->
+    value_of exp env (S fuel) = Some val.
+Proof.
     induction fuel; intros; try discriminate; destruct exp;
     match goal with
     | [ H : value_of _ _ _ = _ |- _ ] => simpl in H
@@ -134,7 +172,12 @@ Lemma fuel_incr : forall fuel exp env val, value_of exp env fuel = Some val -> v
             eauto).
 Qed.
 
-Lemma fuel_order : forall exp env val fuel fuel', value_of exp env fuel = Some val -> fuel <= fuel' -> value_of exp env fuel' = Some val.
+Lemma fuel_order :
+    forall exp env val fuel fuel',
+    value_of exp env fuel = Some val ->
+    fuel <= fuel' ->
+    value_of exp env fuel' = Some val.
+Proof.
     Hint Resolve fuel_incr.
     induction 2; auto.
 Qed.
@@ -161,7 +204,11 @@ Lemma le_max_3 : forall a b c, c <= max (max a b) c.
     apply le_max_r.
 Qed.
 
-Theorem value_of_completeness : forall exp env val, value_of_rel exp env val -> exists fuel, value_of exp env fuel = Some val.
+Theorem value_of_completeness :
+    forall exp env val,
+    value_of_rel exp env val ->
+    exists fuel, value_of exp env fuel = Some val.
+Proof.
     Hint Resolve le_max_l le_max_r le_max_1 le_max_2 le_max_3.
     induction 1;
     match goal with
@@ -178,7 +225,11 @@ Theorem value_of_completeness : forall exp env val, value_of_rel exp env val -> 
             eauto).
 Qed.
 
-Theorem value_of_correctness : forall exp env val, (exists fuel, value_of exp env fuel = Some val) <-> value_of_rel exp env val.
+Theorem value_of_correctness :
+    forall exp env val,
+    (exists fuel, value_of exp env fuel = Some val) <->
+    value_of_rel exp env val.
+Proof.
     Hint Resolve value_of_soundness value_of_completeness.
     intros; split; auto.
 Qed.
