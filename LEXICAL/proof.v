@@ -417,10 +417,14 @@ Module Lexical.
       end;
       repeat (
           try match goal with
-              | [ _ : context[match value_of ?FUEL ?EXP ?ENV with Some _ => _ | None => _ end] |- _ ] => destruct (value_of FUEL EXP ENV) eqn:?; try discriminate
-              | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ => _ end] |- _ ] => destruct VAL; try discriminate
-              | [ _ : context[if ?B then _ else _] |- _ ] => destruct B
-              | [ H : Some _ = Some _ |- _ ] => inversion H; subst
+              | [ _ : context[match value_of ?FUEL ?EXP ?ENV with Some _ => _ | None => _ end] |- _ ] =>
+                destruct (value_of FUEL EXP ENV) eqn:?; try discriminate
+              | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ => _ end] |- _ ] =>
+                destruct VAL; try discriminate
+              | [ _ : context[if ?B then _ else _] |- _ ] =>
+                destruct B
+              | [ H : Some _ = Some _ |- _ ] =>
+                inversion H; subst; clear H
               end;
           eauto).
   Qed.
@@ -436,10 +440,14 @@ Module Lexical.
       end;
       repeat (
           try match goal with
-              | [ _ : context[match value_of ?FUEL ?EXP ?ENV with Some _ => _ | None => _ end] |- _ ] => destruct (value_of FUEL EXP ENV) eqn:?; try discriminate
-              | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ => _ end] |- _ ] => destruct VAL; try discriminate
-              | [ _ : context[if ?B then _ else _] |- _ ] => destruct B
-              | [ H : Some _ = Some _ |- _ ] => inversion H; subst; clear H
+              | [ _ : context[match value_of ?FUEL ?EXP ?ENV with Some _ => _ | None => _ end] |- _ ] =>
+                destruct (value_of FUEL EXP ENV) eqn:?; try discriminate
+              | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ => _ end] |- _ ] =>
+                destruct VAL; try discriminate
+              | [ _ : context[if ?B then _ else _] |- _ ] =>
+                destruct B
+              | [ H : Some _ = Some _ |- _ ] =>
+                inversion H; subst; clear H
               end;
           eauto).
   Qed.
@@ -456,19 +464,15 @@ Module Lexical.
 
   Lemma le_max_1 : forall a b c, a <= max (max a b) c.
     intros.
-    assert (max a (max b c) = max (max a b) c).
-    apply max_assoc.
-    rewrite <- H.
+    rewrite <- max_assoc.
     apply le_max_l.
   Qed.
 
   Lemma le_max_2 : forall a b c, b <= max (max a b) c.
     intros.
-    assert (b <= max a b).
-    apply le_max_r.
-    assert (max a b <= max (max a b) c).
+    rewrite (max_comm a b).
+    rewrite <- max_assoc.
     apply le_max_l.
-    omega.
   Qed.
 
   Lemma le_max_3 : forall a b c, c <= max (max a b) c.
@@ -484,10 +488,17 @@ Module Lexical.
     Hint Resolve fuel_order le_max_l le_max_r le_max_1 le_max_2 le_max_3.
     induction 1;
       match goal with
-      | [ IH1 : exists _, _, IH2 : exists _, _, IH3 : exists _, _ |- _ ] => destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ]; destruct IH3 as [ fuel3 ? ]; exists (S (max (max fuel1 fuel2) fuel3))
-      | [ IH1 : exists _, _, IH2 : exists _, _ |- _ ] => destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ]; exists (S (max fuel1 fuel2))
-      | [ IH1 : exists _, _ |- _ ] => destruct IH1 as [ fuel1 ? ]; exists (S fuel1)
-      | [ |- _ ] => exists (S O)
+      | [ IH1 : exists _, _, IH2 : exists _, _, IH3 : exists _, _ |- _ ] =>
+        destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ]; destruct IH3 as [ fuel3 ? ];
+          exists (S (max (max fuel1 fuel2) fuel3))
+      | [ IH1 : exists _, _, IH2 : exists _, _ |- _ ] =>
+        destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ];
+          exists (S (max fuel1 fuel2))
+      | [ IH1 : exists _, _ |- _ ] =>
+        destruct IH1 as [ fuel1 ? ];
+          exists (S fuel1)
+      | [ |- _ ] =>
+        exists (S O)
       end;
       eauto.
   Qed.
@@ -556,11 +567,16 @@ Module Translation.
   Ltac translation_of_inversion_finisher :=
     repeat (
         try match goal with
-            | [ _ : context[match translation_of ?EXP ?SENV with Some _ => _ | None => _ end] |- _ ] => destruct (translation_of EXP SENV) eqn:?; try discriminate
-            | [ _ : context[match find_index ?S ?SENV with Some _ => _ | None => _ end] |- _ ] => destruct (find_index S SENV) eqn:?; try discriminate
-            | [ _ : context[let (_, _) := ?BIND in _] |- _ ] => destruct BIND
-            | [ H : Some _ = Some _ |- _ ] => inversion H; subst; clear H
-            | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2_eq_dec in H; try apply eq_nat_dec; subst
+            | [ _ : context[match translation_of ?EXP ?SENV with Some _ => _ | None => _ end] |- _ ] =>
+              destruct (translation_of EXP SENV) eqn:?; try discriminate
+            | [ _ : context[match find_index ?S ?SENV with Some _ => _ | None => _ end] |- _ ] =>
+              destruct (find_index S SENV) eqn:?; try discriminate
+            | [ _ : context[let (_, _) := ?BIND in _] |- _ ] =>
+              destruct BIND
+            | [ H : Some _ = Some _ |- _ ] =>
+              inversion H; subst; clear H
+            | [ H : existT _ _ _ = existT _ _ _ |- _ ] =>
+              apply inj_pair2_eq_dec in H; try apply eq_nat_dec; subst
             end;
         eauto 10).
 

@@ -99,10 +99,14 @@ Proof.
     end;
     repeat (
         try match goal with
-              | [ _ : context[match value_of ?EXP ?ENV with Some _ => _ | None => _ end ] |- _ ] => destruct (value_of EXP ENV) eqn:?; try discriminate
-              | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ end ] |- _ ] => destruct VAL; try discriminate
-              | [ _ : context[if ?B then _ else _] |- _ ] => destruct B
-              | [ H : Some _ = Some _ |- _ ] => inversion H; subst; clear H
+            | [ _ : context[match value_of ?EXP ?ENV with Some _ => _ | None => _ end] |- _ ] =>
+              destruct (value_of EXP ENV) eqn:?; try discriminate
+            | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ end] |- _ ] =>
+              destruct VAL; try discriminate
+            | [ _ : context[if ?B then _ else _] |- _ ] =>
+              destruct B
+            | [ H : Some _ = Some _ |- _ ] =>
+              inversion H; subst; clear H
             end;
         eauto).
 Qed.
@@ -116,7 +120,8 @@ Proof.
   induction 0; simpl;
     repeat (
         try match goal with
-            | [ H : value_of ?EXP ?ENV = _ |- context[match value_of ?EXP ?ENV with Some _ => _ | None => _ end] ] => try (rewrite -> H; clear H)
+            | [ H : value_of ?EXP ?ENV = _ |- context[match value_of ?EXP ?ENV with Some _ => _ | None => _ end] ] =>
+              try (rewrite -> H; clear H)
             end;
         eauto).
 Qed.
