@@ -1,6 +1,5 @@
 Require Import Bool ZArith Arith String List.
 Set Implicit Arguments.
-Set Asymmetric Patterns.
 
 Inductive expression : Set :=
 | Const : nat -> expression
