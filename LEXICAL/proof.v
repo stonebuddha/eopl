@@ -13,17 +13,17 @@ Hint Resolve eq_nat_dec.
 Ltac simplify :=
   repeat
     match goal with
-    | h1 : False |- _ => destruct h1
-    | |- True => constructor
-    | h1 : True |- _ => clear h1
-    | |- ~ _ => intro
-    | h1 : ~ ?p1, h2 : ?p1 |- _ => destruct (h1 h2)
-    | h1 : _ \/ _ |- _ => destruct h1
-    | |- _ /\ _ => constructor
-    | h1 : _ /\ _ |- _ => destruct h1
-    | h1 : exists _, _ |- _ => destruct h1
-    | |- forall _, _ => intro
-    | _ : ?x1 = ?x2 |- _ => subst x2 || subst x1
+    | [ H1 : False |- _ ] => destruct H1
+    | [ |- True ] => constructor
+    | [ H1 : True |- _ ] => clear H1
+    | [ |- ~ _ ] => intro
+    | [ H1 : ~ ?P1, H2 : ?P1 |- _ ] => destruct (H1 H2)
+    | [ H1 : _ \/ _ |- _ ] => destruct H1
+    | [ |- _ /\ _ ] => constructor
+    | [ H1 : _ /\ _ |- _ ] => destruct H1
+    | [ H1 : exists _, _ |- _ ] => destruct H1
+    | [ |- forall _, _ ] => intro
+    | [ _ : ?X1 = ?X2 |- _ ] => subst X2 || subst X1
     end.
 
 Ltac existT_inversion :=
@@ -314,6 +314,16 @@ Module Lexical.
       end
     end.
 
+  Ltac value_of_equation_finisher :=
+    repeat (
+        try match goal with
+            | [ H : value_of ?FUEL ?EXP ?ENV = _ |- context[match value_of ?FUEL ?EXP ?ENV with Some _ => _ | None => _ end] ] =>
+              try (rewrite -> H; clear H)
+            | [ H : ?LHS = ?RHS |- context[Some ?LHS = Some ?RHS] ] =>
+              rewrite -> H; clear H
+            end;
+        eauto).
+
   Lemma value_of_diff_equation :
     forall fuel ctx (exp1 : expression ctx) exp2 env num1 num2,
       value_of fuel exp1 env = Some (Num num1) ->
@@ -322,9 +332,7 @@ Module Lexical.
   Proof.
     intros.
     simpl.
-    rewrite -> H.
-    rewrite -> H0.
-    trivial.
+    value_of_equation_finisher.
   Qed.
 
   Lemma value_of_is_zero_equation :
@@ -334,8 +342,7 @@ Module Lexical.
   Proof.
     intros.
     simpl.
-    rewrite -> H.
-    trivial.
+    value_of_equation_finisher.
   Qed.
 
   Lemma value_of_if_true_equation :
@@ -346,8 +353,7 @@ Module Lexical.
   Proof.
     intros.
     simpl.
-    rewrite -> H.
-    trivial.
+    value_of_equation_finisher.
   Qed.
 
   Lemma value_of_if_false_equation :
@@ -358,8 +364,7 @@ Module Lexical.
   Proof.
     intros.
     simpl.
-    rewrite -> H.
-    trivial.
+    value_of_equation_finisher.
   Qed.
 
   Lemma value_of_var_equation :
@@ -369,8 +374,7 @@ Module Lexical.
   Proof.
     intros.
     simpl.
-    rewrite -> H.
-    trivial.
+    value_of_equation_finisher.
   Qed.
 
   Lemma value_of_let_equation :
@@ -381,8 +385,7 @@ Module Lexical.
   Proof.
     intros.
     simpl.
-    rewrite -> H.
-    trivial.
+    value_of_equation_finisher.
   Qed.
 
   Lemma value_of_call_equation :
@@ -394,9 +397,7 @@ Module Lexical.
   Proof.
     intros.
     simpl.
-    rewrite -> H.
-    rewrite -> H0.
-    trivial.
+    value_of_equation_finisher.
   Qed.
 
   Hint Resolve value_of_diff_equation value_of_is_zero_equation value_of_if_true_equation value_of_if_false_equation value_of_var_equation value_of_let_equation value_of_call_equation.
@@ -734,8 +735,6 @@ Module Translation.
     intros.
     generalize dependent ctx.
     generalize dependent n.
-    generalize dependent var.
-    generalize dependent val.
     induction env; intros.
     simpl in H2.
     inversion H2.
@@ -744,32 +743,45 @@ Module Translation.
     subst.
     apply inj_pair2_eq_dec in H9; auto.
     subst.
-    simpl in H2.
+    inversion H1.
+    subst.
+    apply inj_pair2_eq_dec in H10; auto.
+    subst.
     simpl in H.
+    simpl in H2.
+
+    dependent destruction saved_env'.
+    inversion H7.
+    subst.
+    inversion H5.
+    apply inj_pair2_eq_dec in H3; auto.
+    subst.
     destruct (string_dec var s).
     inversion H.
     subst.
     inversion H2.
     subst.
-    dependent destruction env'.
-    simpl.
-    exists e.
-    inversion H1.
-    subst.
-    auto.
+    eauto.
+    inversion H.
 
-    destruct (find_index var saved_senv) eqn:?; try congruence.
+    inversion H7.
+    apply inj_pair2_eq_dec in H6; auto.
+    subst.
+    inversion H5.
+    apply inj_pair2_eq_dec in H14; auto.
+    subst.
+    destruct (string_dec var s).
+    inversion H.
+    subst.
+    inversion H2.
+    subst.
+    eauto.
+
+    destruct (find_index var (Extend x saved_senv0)) eqn:?; try discriminate.
     destruct s0.
     inversion H.
     subst.
-    dependent destruction env'.
-    inversion H1.
-    subst.
-    apply inj_pair2_eq_dec in H11; auto.
-    subst.
-    specialize (IHenv val).
-    specialize (IHenv var).
-    apply IHenv with (senv := saved_senv) (env' := env') (pf := l) (pf' := lt_S_n _ _ pf') in H2; auto.
+    apply IHenv with (env' := Lexical.Extend e0 saved_env') (pf' := lt_S_n _ _ pf') in Heqo; auto.
   Qed.
 
   Lemma assoc_some :
@@ -783,51 +795,34 @@ Module Translation.
     intros.
     generalize dependent n.
     generalize dependent env.
-    generalize dependent var.
     generalize dependent val'.
     dependent induction senv; intros.
     inversion pf.
-    destruct n.
-    simpl in H.
-    destruct (string_dec var s).
-    inversion H0.
-    apply inj_pair2_eq_dec in H7; auto.
-    subst.
-    simpl.
-    destruct (string_dec s s); try congruence.
-    exists val.
-    split; auto.
-    inversion H1.
-    apply inj_pair2_eq_dec in H8; auto.
-    subst.
-    auto.
-    destruct (find_index var senv); try congruence.
-    destruct s0.
-    inversion H.
+
     dependent destruction env'.
+    subst.
     inversion H0.
-    apply inj_pair2_eq_dec in H7; auto.
+    apply inj_pair2_eq_dec in H6; auto.
     subst.
     inversion H1.
     apply inj_pair2_eq_dec in H9; auto.
     subst.
     simpl in H.
+
     destruct (string_dec var s).
     inversion H.
-    destruct (find_index var senv) eqn:?; try congruence.
+    subst.
+    simpl.
+    destruct (string_dec s s); try congruence.
+    eauto.
+
+    destruct (find_index var senv) eqn:?; try discriminate.
     destruct s0.
     inversion H.
     subst.
-    specialize (IHsenv env').
-    specialize (IHsenv (Lexical.nth (Lexical.Extend e env') pf')).
-    specialize (IHsenv var).
-    specialize (IHsenv saved_env).
-    apply IHsenv with (n0 := n) (pf := l) (pf'0 := lt_S_n _ _ pf') in H6; auto.
-    destruct H6.
-    destruct H2.
     simpl.
     destruct (string_dec var s); try congruence.
-    eauto.
+    apply IHsenv with (env' := env') (n := x) (pf := l) (pf' := lt_S_n _ _ pf') (val' := Lexical.nth env' (lt_S_n _ _ pf'))in H5; auto.
   Qed.
 
   Lemma translation_of_soundness_generalized :
@@ -845,149 +840,59 @@ Module Translation.
     generalize dependent senv.
     generalize dependent env.
     dependent induction H0; intros.
-    apply translation_of_const_inversion in H.
-    subst.
+    apply translation_of_const_inversion in H; simplify.
     eauto.
 
-    apply translation_of_diff_inversion in H.
-    destruct H.
-    destruct H.
-    destruct H.
-    destruct H0.
-    subst.
-    assert (Q1 := H2).
-    apply IHvalue_of_rel1 with (senv := senv) (exp := x) in Q1; auto.
-    destruct Q1.
-    destruct H.
-    assert (Q2 := H2).
-    apply IHvalue_of_rel2 with (senv := senv) (exp := x0) in Q2; auto.
-    destruct Q2.
-    destruct H5.
+    apply translation_of_diff_inversion in H; simplify.
+    apply IHvalue_of_rel1 with (senv := senv) (exp := x) in H2 as Q1; auto; simplify.
+    apply IHvalue_of_rel2 with (senv := senv) (exp := x0) in H2 as Q2; auto; simplify.
     inversion H.
     inversion H5.
     subst.
     eauto.
 
-    apply translation_of_is_zero_inversion in H.
-    destruct H.
-    destruct H.
-    subst.
-    assert (Q1 := H2).
-    apply IHvalue_of_rel with (senv := senv) (exp := x) in Q1; auto.
-    destruct Q1.
-    destruct H.
+    apply translation_of_is_zero_inversion in H; simplify.
+    apply IHvalue_of_rel with (senv := senv) (exp := x) in H2 as Q1; auto; simplify.
     inversion H.
     subst.
     eauto.
 
-    apply translation_of_if_inversion in H.
-    destruct H.
-    destruct H.
-    destruct H.
-    destruct H.
-    destruct H0.
-    destruct H3.
-    subst.
-    assert (Q1 := H2).
-    apply IHvalue_of_rel1 with (senv := senv) (exp := x) in Q1; auto.
-    destruct Q1.
-    destruct H.
-    assert (Q2 := H2).
-    apply IHvalue_of_rel2 with (senv := senv) (exp := x0) in Q2; auto.
-    destruct Q2.
-    destruct H6.
+    apply translation_of_if_inversion in H; simplify.
+    apply IHvalue_of_rel1 with (senv := senv) (exp := x) in H2 as Q1; auto; simplify.
+    apply IHvalue_of_rel2 with (senv := senv) (exp := x0) in H2 as Q2; auto; simplify.
     inversion H.
     subst.
     eauto.
 
-    apply translation_of_if_inversion in H.
-    destruct H.
-    destruct H.
-    destruct H.
-    destruct H.
-    destruct H0.
-    destruct H3.
-    subst.
-    assert (Q1 := H2).
-    apply IHvalue_of_rel1 with (senv := senv) (exp := x) in Q1; auto.
-    destruct Q1.
-    destruct H.
-    assert (Q2 := H2).
-    apply IHvalue_of_rel2 with (senv := senv) (exp := x1) in Q2; auto.
-    destruct Q2.
-    destruct H6.
+    apply translation_of_if_inversion in H; simplify.
+    apply IHvalue_of_rel1 with (senv := senv) (exp := x) in H2 as Q1; auto; simplify.
+    apply IHvalue_of_rel2 with (senv := senv) (exp := x1) in H2 as Q2; auto; simplify.
     inversion H.
     subst.
     eauto.
 
-    apply translation_of_var_inversion in H0.
-    destruct H0.
-    destruct H0.
-    destruct H0.
-    subst.
-    assert (T := assoc_some).
-    specialize (T ctx).
-    specialize (T x).
-    specialize (T senv).
-    specialize (T n).
-    specialize (T x0).
-    specialize (T env0).
-    specialize (T env).
-    specialize (T pf).
-    specialize (T (Lexical.nth env pf)).
-    apply T in H3; auto.
-    destruct H3.
-    destruct H.
+    apply translation_of_var_inversion in H0; simplify.
+    apply assoc_some with (env := env0) (env' := env) (pf' := pf) (val' := Lexical.nth env pf) in H3; auto; simplify.
     eauto.
 
-    apply translation_of_let_inversion in H.
-    destruct H.
-    destruct H.
-    destruct H.
-    destruct H.
-    destruct H0.
-    subst.
-    assert (Q1 := H2).
-    apply IHvalue_of_rel1 with (senv := senv) (exp := x0) in Q1; auto.
-    destruct Q1.
-    destruct H.
-    assert (proc_env_lexical_env_rel (Proc.Extend x x2 env0) (Lexical.Extend val1 env)).
-    auto.
-    apply IHvalue_of_rel2 with (senv := Extend x senv) (exp := x1) in H5; auto.
-    destruct H5.
-    destruct H5.
+    apply translation_of_let_inversion in H; simplify.
+    apply IHvalue_of_rel1 with (senv := senv) (exp := x0) in H2 as Q1; auto; simplify.
+    eapply PLExtend in H2 as Q2; eauto.
+    apply IHvalue_of_rel2 with (senv := Extend x senv) (exp := x1) in Q2; auto; simplify.
     eauto.
 
-    apply translation_of_proc_inversion in H.
-    destruct H.
-    destruct H.
-    destruct H.
-    subst.
+    apply translation_of_proc_inversion in H; simplify.
     eauto.
 
-    apply translation_of_call_inversion in H.
-    destruct H.
-    destruct H.
-    destruct H.
-    destruct H0.
-    subst.
-    assert (Q1 := H2).
-    apply IHvalue_of_rel1 with (senv := senv) (exp := x) in Q1; auto.
-    destruct Q1.
-    destruct H.
-    assert (Q2 := H2).
-    apply IHvalue_of_rel2 with (senv := senv) (exp := x0) in Q2; auto.
-    destruct Q2.
-    destruct H5.
+    apply translation_of_call_inversion in H; simplify.
+    apply IHvalue_of_rel1 with (senv := senv) (exp := x) in H2 as Q1; auto; simplify.
+    apply IHvalue_of_rel2 with (senv := senv) (exp := x0) in H2 as Q2; auto; simplify.
     inversion H.
     apply inj_pair2_eq_dec in H8; auto.
     apply inj_pair2_eq_dec in H9; auto.
     subst.
-    assert (proc_env_lexical_env_rel (Proc.Extend x3 x2 saved_env0) (Lexical.Extend rand_val saved_env)).
-    auto.
-    apply IHvalue_of_rel3 with (senv := Extend x3 senv0) (exp := body0) in H7; auto.
-    destruct H7.
-    destruct H7.
+    apply PLExtend with (x := x3) (val := x2) (val' := rand_val) in H13 as Q3; auto.
+    apply IHvalue_of_rel3 with (senv := Extend x3 senv0) (exp := body0) in Q3; auto; simplify.
     eauto.
   Qed.
 
@@ -1009,142 +914,60 @@ Module Translation.
   Proof.
     intros.
     generalize dependent ctx.
-    induction H0; intros.
-    rewrite translation_of_equation in H.
-    inversion H.
-    subst.
-    eauto.
+    induction H0; intros;
+    match goal with
+    | [ H : translation_of _ _ = _ |- _ ] => rewrite translation_of_equation in H
+    end;
+    repeat (
+        try match goal with
+            | [ H : context[match translation_of ?EXP ?SENV with Some _ => _ | None => _ end] |- _ ] => destruct (translation_of EXP SENV) eqn:?; try discriminate
+            | [ H : Some _ = Some _ |- _ ] => inversion H; subst; clear H
+            end;
+        eauto).
 
-    rewrite translation_of_equation in H.
-    destruct (translation_of exp1 senv) eqn:?; try discriminate.
-    destruct (translation_of exp2 senv) eqn:?; try discriminate.
+    apply (IHvalue_of_rel1) with (senv := senv) (exp' := e) in H2 as Q1; auto; simplify.
+    apply (IHvalue_of_rel2) with (senv := senv) (exp' := e0) in H2 as Q2; auto; simplify.
     inversion H.
     subst.
-    assert (Q1 := H2).
-    apply (IHvalue_of_rel1) with (senv := senv) (exp' := e) in Q1; auto.
-    destruct Q1.
-    destruct H0.
-    assert (Q2 := H2).
-    apply (IHvalue_of_rel2) with (senv := senv) (exp' := e0) in Q2; auto.
-    destruct Q2.
-    destruct H4.
-    inversion H0.
-    subst.
-    inversion H4.
-    subst.
-    eauto.
-
-    rewrite translation_of_equation in H.
-    destruct (translation_of exp1 senv) eqn:?; try discriminate.
-    inversion H.
-    subst.
-    assert (Q1 := H2).
-    apply (IHvalue_of_rel) with (senv := senv) (exp' := e) in Q1; auto.
-    destruct Q1.
-    destruct H3.
     inversion H3.
     subst.
     eauto.
 
-    rewrite translation_of_equation in H.
-    destruct (translation_of exp1 senv) eqn:?; try discriminate.
-    destruct (translation_of exp2 senv) eqn:?; try discriminate.
-    destruct (translation_of exp3 senv) eqn:?; try discriminate.
+    apply (IHvalue_of_rel) with (senv := senv) (exp' := e) in H2 as Q1; auto; simplify.
     inversion H.
-    subst.
-    assert (Q1 := H2).
-    apply (IHvalue_of_rel1) with (senv := senv) (exp' := e) in Q1; auto.
-    destruct Q1.
-    destruct H0.
-    assert (Q2 := H2).
-    apply (IHvalue_of_rel2) with (senv := senv) (exp' := e0) in Q2; auto.
-    destruct Q2.
-    destruct H4.
-    inversion H0.
     subst.
     eauto.
 
-    rewrite translation_of_equation in H.
-    destruct (translation_of exp1 senv) eqn:?; try discriminate.
-    destruct (translation_of exp2 senv) eqn:?; try discriminate.
-    destruct (translation_of exp3 senv) eqn:?; try discriminate.
+    apply (IHvalue_of_rel1) with (senv := senv) (exp' := e) in H2 as Q1; auto; simplify.
+    apply (IHvalue_of_rel2) with (senv := senv) (exp' := e0) in H2 as Q2; auto; simplify.
     inversion H.
-    subst.
-    assert (Q1 := H2).
-    apply (IHvalue_of_rel1) with (senv := senv) (exp' := e) in Q1; auto.
-    destruct Q1.
-    destruct H0.
-    assert (Q2 := H2).
-    apply (IHvalue_of_rel2) with (senv := senv) (exp' := e1) in Q2; auto.
-    destruct Q2.
-    destruct H4.
-    inversion H0.
     subst.
     eauto.
 
-    rewrite translation_of_equation in H0.
+    apply (IHvalue_of_rel1) with (senv := senv) (exp' := e) in H2 as Q1; auto; simplify.
+    apply (IHvalue_of_rel2) with (senv := senv) (exp' := e1) in H2 as Q2; auto; simplify.
+    inversion H.
+    subst.
+    eauto.
+
     destruct (find_index var senv) eqn:?; try discriminate.
     destruct s.
     inversion H0.
     subst.
-    clear H0.
-    assert (T := nth_some).
-    specialize (T ctx).
-    specialize (T var).
-    specialize (T senv).
-    specialize (T x).
-    specialize (T l).
-    specialize (T env).
-    specialize (T env').
-    specialize (T l).
-    specialize (T val).
-    apply T in Heqo; auto.
-    destruct Heqo.
-    destruct H0.
+    apply nth_some with (env := env) (env' := env') (pf' := l) (val := val) in Heqo; auto; simplify.
     eauto.
 
-    rewrite translation_of_equation in H.
-    destruct (translation_of exp1 senv) eqn:?; try discriminate.
-    destruct (translation_of body (Extend var senv)) eqn:?; try discriminate.
-    inversion H.
-    subst.
-    assert (Q1 := H2).
-    apply IHvalue_of_rel1 with (senv := senv) (exp' := e) in Q1; auto.
-    destruct Q1.
-    destruct H0.
-    assert (proc_env_lexical_env_rel (Proc.Extend var val1 env) (Lexical.Extend x env')).
-    auto.
-    apply IHvalue_of_rel2 with (senv := Extend var senv) (exp' := e0) in H4; auto.
-    destruct H4.
-    destruct H4.
+    apply IHvalue_of_rel1 with (senv := senv) (exp' := e) in H2 as Q1; auto; simplify.
+    apply PLExtend with (x := var) (val := val1) (val' := x) in H2; auto.
+    apply IHvalue_of_rel2 with (senv := Extend var senv) (exp' := e0) in H2; auto; simplify.
     eauto.
 
-    rewrite translation_of_equation in H.
-    destruct (translation_of body (Extend var senv)) eqn:?; try discriminate.
+    apply IHvalue_of_rel1 with (senv := senv) (exp' := e) in H2 as Q1; auto; simplify.
+    apply IHvalue_of_rel2 with (senv := senv) (exp' := e0) in H2 as Q2; auto; simplify.
     inversion H.
     subst.
-    eauto.
-
-    rewrite translation_of_equation in H.
-    destruct (translation_of rator senv) eqn:?; try discriminate.
-    destruct (translation_of rand senv) eqn:?; try discriminate.
-    inversion H.
-    subst.
-    assert (Q1 := H2).
-    apply IHvalue_of_rel1 with (senv := senv) (exp' := e) in Q1; auto.
-    destruct Q1.
-    destruct H0.
-    assert (Q2 := H2).
-    apply IHvalue_of_rel2 with (senv := senv) (exp' := e0) in Q2; auto.
-    destruct Q2.
-    destruct H4.
-    inversion H0.
-    subst.
-    assert (proc_env_lexical_env_rel (Proc.Extend var rand_val saved_env) (Lexical.Extend x0 saved_env')).
-    auto.
-    apply IHvalue_of_rel3 with (env' := Lexical.Extend x0 saved_env') in H11; auto.
-    destruct H11.
-    destruct H7.
+    apply PLExtend with (x := var) (val := rand_val) (val' := x0) in H11; auto.
+    apply IHvalue_of_rel3 with (env' := Lexical.Extend x0 saved_env') in H10; auto; simplify.
     eauto.
   Qed.
 
