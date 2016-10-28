@@ -11,7 +11,7 @@ and expval =
 and proc = nameless_expression * environment
 
 and bind =
-  | ValBind of expval list
+  | ValBind of (expval ref) list
 
 let string_of_expval eval =
   match eval with
@@ -25,19 +25,15 @@ let empty_env () = []
 
 let extend_env bind env = bind :: env
 
-let rec apply_env env dep who is_letrec =
+let rec apply_env env dep who =
   match env with
   | [] -> raise Impossible
   | ValBind saved_vals :: tl ->
     if dep = 0 then
       let saved_val = List.nth saved_vals who in
-      if is_letrec then
-        let ProcVal (p_body, _) = saved_val in
-        ProcVal (p_body, env)
-      else
-        saved_val
+      saved_val
     else
-      apply_env tl (dep - 1) who is_letrec
+      apply_env tl (dep - 1) who
 
 exception Interpreter_error of string * Ploc.t
 
@@ -60,11 +56,13 @@ let rec value_of exp env =
     (match eval1 with
      | BoolVal bool1 -> if bool1 then value_of exp2 env else value_of exp3 env
      | _ -> raise (Interpreter_error ("the predicate of if should be a boolean", loc)))
-  | NLVarExp ((dep, who), loc) -> apply_env env dep who false
+  | NLVarExp ((dep, who), loc) -> !(apply_env env dep who)
   | NLLetExp (exps, body, loc) ->
-    let evals = List.map (fun exp1 -> value_of exp1 env) exps in
+    let evals = List.map (fun exp1 -> ref (value_of exp1 env)) exps in
     value_of body (extend_env (ValBind (List.rev evals)) env)
-  | NLProcExp (body, loc) -> ProcVal (body, env)
+  | NLProcExp (frees, body, loc) ->
+    let trimmed_env = extend_env (ValBind (List.map (fun (dep, who) -> apply_env env dep who) frees)) (empty_env ()) in
+    ProcVal (body, trimmed_env)
   | NLCallExp (rator, rands, loc) ->
     let rator_val = value_of rator env in
     (match rator_val with
@@ -82,22 +80,25 @@ let rec value_of exp env =
           | _ -> raise (Interpreter_error ("all clauses should have a boolean-valued condition", loc)))) in
     inner clauses
   | NLLetrecExp (p_bodies, letrec_body, loc) ->
-    value_of letrec_body (extend_env (ValBind (List.rev (List.map (fun p_body -> ProcVal (p_body, env)) p_bodies))) env)
-  | NLLetrecVarExp ((dep, who), loc) -> apply_env env dep who true
+    let refs = List.map (fun (frees, p_body) ->
+        ref (ProcVal (p_body, extend_env (ValBind (List.map (fun (dep, who) -> apply_env env dep who) frees)) (empty_env ())))) p_bodies in
+    let new_env = extend_env (ValBind refs) env in
+    let () = List.iter (fun proc -> let ProcVal (p_body, saved_env) = !proc in proc := ProcVal (p_body, ValBind refs :: saved_env)) refs in
+    value_of letrec_body new_env
 
 and apply_procedure proc arg_vals =
   match proc with
-  | (body, saved_env) -> value_of body (extend_env (ValBind (List.rev arg_vals)) saved_env)
+  | (body, saved_env) -> value_of body (extend_env (ValBind (List.map (fun arg_val -> ref arg_val) (List.rev arg_vals))) saved_env)
 
 let value_of_top_level top env =
   match top with
   | NLExpTop exp1 ->
     let eval1 = value_of exp1 env in
     (eval1 |> string_of_expval |> prefix "val it = " |> suffix ";" |> print_endline);
-    extend_env (ValBind [eval1]) env
+    extend_env (ValBind [ref eval1]) env
   | NLValTop (var, exp1) ->
     let eval1 = value_of exp1 env in
     (eval1 |> string_of_expval |> prefix ("val " ^ var ^ " = ") |> suffix ";" |> print_endline);
-    extend_env (ValBind [eval1]) env
+    extend_env (ValBind [ref eval1]) env
 
 let value_of_program (NLAProgram tops) = List.fold_left (fun env top -> value_of_top_level top env) (empty_env ()) tops; ()

@@ -42,11 +42,10 @@ and nameless_expression =
   | NLIfExp of nameless_expression * nameless_expression * nameless_expression * Ploc.t
   | NLVarExp of (int * int) * Ploc.t
   | NLLetExp of nameless_expression list * nameless_expression * Ploc.t
-  | NLProcExp of nameless_expression * Ploc.t
+  | NLProcExp of (int * int) list * nameless_expression * Ploc.t
   | NLCallExp of nameless_expression * nameless_expression list * Ploc.t
   | NLCondExp of (nameless_expression * nameless_expression) list * Ploc.t
-  | NLLetrecExp of nameless_expression list * nameless_expression * Ploc.t
-  | NLLetrecVarExp of (int * int) * Ploc.t
+  | NLLetrecExp of ((int * int) list * nameless_expression) list * nameless_expression * Ploc.t
 
 EXTEND
   p : [
