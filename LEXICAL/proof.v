@@ -990,4 +990,107 @@ Module Translation.
     Hint Resolve translation_of_soundness translation_of_completeness.
     intros; eauto.
   Qed.
+
+  Inductive proc_exp_no_free_var : forall ctx, static_environment ctx -> Proc.expression -> Prop :=
+  | PENFVConst :
+      forall ctx (senv : static_environment ctx) num,
+        proc_exp_no_free_var senv (Proc.Const num)
+  | PENFVDiff :
+      forall ctx (senv : static_environment ctx) exp1 exp2,
+        proc_exp_no_free_var senv exp1 ->
+        proc_exp_no_free_var senv exp2 ->
+        proc_exp_no_free_var senv (Proc.Diff exp1 exp2)
+  | PENFVIsZero :
+      forall ctx (senv : static_environment ctx) exp1,
+        proc_exp_no_free_var senv exp1 ->
+        proc_exp_no_free_var senv (Proc.IsZero exp1)
+  | PENFVIf :
+      forall ctx (senv : static_environment ctx) exp1 exp2 exp3,
+        proc_exp_no_free_var senv exp1 ->
+        proc_exp_no_free_var senv exp2 ->
+        proc_exp_no_free_var senv exp3 ->
+        proc_exp_no_free_var senv (Proc.If exp1 exp2 exp3)
+  | PENFVVarEq :
+      forall ctx (saved_senv : static_environment ctx) x,
+        proc_exp_no_free_var (Extend x saved_senv) (Proc.Var x)
+  | PENFVVarNeq :
+      forall ctx (saved_senv : static_environment ctx) x y,
+        x <> y ->
+        proc_exp_no_free_var saved_senv (Proc.Var x) ->
+        proc_exp_no_free_var (Extend y saved_senv) (Proc.Var x)
+  | PENFVLet :
+      forall ctx (senv : static_environment ctx) var exp1 body,
+        proc_exp_no_free_var senv exp1 ->
+        proc_exp_no_free_var (Extend var senv) body ->
+        proc_exp_no_free_var senv (Proc.Let var exp1 body)
+  | PENFVProc :
+      forall ctx (senv : static_environment ctx) var body,
+        proc_exp_no_free_var (Extend var senv) body ->
+        proc_exp_no_free_var senv (Proc.Proc var body)
+  | PENFVCall :
+      forall ctx (senv : static_environment ctx) rator rand,
+        proc_exp_no_free_var senv rator ->
+        proc_exp_no_free_var senv rand ->
+        proc_exp_no_free_var senv (Proc.Call rator rand).
+
+  Lemma no_free_var_find_some :
+    forall ctx (senv : static_environment ctx) x,
+      proc_exp_no_free_var senv (Proc.Var x) ->
+      exists idx : { n : nat | n < ctx },
+        find_index x senv = Some idx.
+  Proof.
+    intros.
+    dependent induction H.
+
+    simpl.
+    destruct (string_dec x x); try congruence.
+    eauto.
+
+    simplify.
+    simpl.
+    destruct (string_dec x y); try congruence.
+    rewrite -> H1.
+    destruct x0.
+    eauto.
+  Qed.
+
+  Lemma translation_of_totalness_generalized :
+    forall ctx (senv : static_environment ctx) exp,
+      proc_exp_no_free_var senv exp ->
+      exists exp',
+        translation_of exp senv = Some exp'.
+    intros.
+    generalize dependent ctx.
+    induction exp; intros; rewrite translation_of_equation;
+    match goal with
+    | [ H : proc_exp_no_free_var _ _ |- _ ] =>
+      inversion H; subst; clear H
+    end;
+    repeat (
+        try match goal with
+            | [ H : existT _ _ _ = existT _ _ _ |- _ ] =>
+              apply inj_pair2_eq_dec in H; auto
+            | [ IH : forall _ _, proc_exp_no_free_var _ ?EXP -> _, H : proc_exp_no_free_var _ ?EXP |- _ ] =>
+              apply IH in H
+            | [ H : translation_of ?EXP ?SENV = Some _ |- context[match translation_of ?EXP ?SENV with Some _ => _ | None => _ end] ] =>
+              rewrite -> H
+            end;
+        simplify;
+        eauto).
+    simpl; destruct (string_dec s s); try congruence; eauto.
+    simpl; destruct (string_dec s y); try congruence.
+    apply no_free_var_find_some in H5; simplify.
+    rewrite -> H.
+    destruct x.
+    eauto.
+  Qed.
+
+  Theorem translation_of_totalness :
+    forall exp,
+      proc_exp_no_free_var Empty exp ->
+      exists exp',
+        translation_of exp Empty = Some exp'.
+    Hint Resolve translation_of_totalness_generalized.
+    intros; auto.
+  Qed.
 End Translation.
