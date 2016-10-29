@@ -27,9 +27,9 @@ let extend_env eval env = eval :: env
 
 let apply_env env var = List.nth env var
 
-let empty_store () = []
+let empty_store () = ref []
 
-let init_store st = st := empty_store ()
+let init_store st = st := []
 
 let newref eval st =
   let refer = List.length (!st) in
@@ -46,7 +46,7 @@ let setref refer eval st =
       List.hd st :: inner (refer - 1) (List.tl st) in
   st := inner refer (!st)
 
-let the_store = ref (empty_store ())
+let the_store = empty_store ()
 
 exception Interpreter_error of string * Ploc.t
 
@@ -124,4 +124,5 @@ let value_of_top_level top env =
     !saved_env
 
 let value_of_program (AProgram tops) =
+  let () = init_store the_store in
   List.fold_left (fun env top -> value_of_top_level top env) (empty_env ()) tops; ()
