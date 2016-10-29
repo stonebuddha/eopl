@@ -67,7 +67,7 @@ let rec value_of exp env =
     let rator_val = value_of rator env in
     (match rator_val with
      | ProcVal proc -> let rand_vals = List.map (fun rand -> value_of rand env) rands in apply_procedure proc rand_vals
-     | _ -> raise (Interpreter_error ("the operator of call shoud be a procedure", loc)))
+     | _ -> raise (Interpreter_error ("the operator of call should be a procedure", loc)))
   | NLCondExp (clauses, loc) ->
     let rec inner clauses =
       (match clauses with

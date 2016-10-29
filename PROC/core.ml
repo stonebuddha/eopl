@@ -53,7 +53,7 @@ let rec value_of exp env =
     let rator_val = value_of rator env in
     (match rator_val with
      | ProcVal proc -> let rand_val = value_of rand env in apply_procedure proc rand_val
-     | _ -> raise (Interpreter_error ("the operator of call shoud be a procedure", loc)))
+     | _ -> raise (Interpreter_error ("the operator of call should be a procedure", loc)))
 
 and apply_procedure proc arg_val =
   match proc with

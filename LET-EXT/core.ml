@@ -123,7 +123,7 @@ let rec value_of exp env =
        if List.length list1 = List.length vars then
          value_of body (List.fold_left (fun new_env (var, eval) -> extend_env var eval new_env) env (List.combine vars list1))
        else
-         raise (Interpreter_error ("the length of the evaluated list in unpack shoud be the same as the number of variables", loc))
+         raise (Interpreter_error ("the length of the evaluated list in unpack should be the same as the number of variables", loc))
      | _ -> raise (Interpreter_error ("the evaluated value in unpack should be a list", loc)))
 
 let value_of_top_level (ExpTop exp1) =
