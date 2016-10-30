@@ -1,0 +1,82 @@
+let a = 5 in
+  let b = 6 in
+    -(b, -(a, 10));
+-(123, 44);
+is_zero(0);
+is_zero(1);
+let a = 5 in
+  if is_zero(a) then 5 else 4;
+let a = -(5, 5) in
+  if is_zero(a) then 5 else 4;
+val a = 5;
+val b = 6;
+-(b, -(a, 10));
+if is_zero(a) then 5 else 4;
+let a = -(a, a) in
+  if is_zero(a) then 5 else 4;
+let f = proc (x) -(x, 11) in (f (f 77));
+(proc (f) (f (f 77)) proc (x) -(x, 11));
+let x = 200 in let f = proc (z) -(z, x) in let x = 100 in let g = proc (z) -(z, x) in -((f 1), (g 1));
+letrec double (x) = if is_zero(x) then 0 else -((double -(x, 1)), -(0, 2))
+in (double 6);
+val minus_two = -(0, 2);
+fun double (x) = if is_zero(x) then 0 else -((double -(x, 1)), minus_two);
+(double -(10, minus_two));
+let x = 30 in let x = -(x, 1) y = -(x, 2) in -(x, y);
+letrec
+  even (x) = if is_zero(x) then 1 else (odd -(x, 1))
+  odd (x) = if is_zero(x) then 0 else (even -(x, 1))
+in (odd 13);
+val a = 1;
+a;
+set a = (double a);
+a;
+val b = 10;
+a;
+b;
+set b = 11;
+a;
+b;
+let x = 0
+in letrec
+  even(dummy) = if is_zero(x) then 1 else begin set x = -(x,1); (odd 888) end
+  odd(dummy) = if is_zero(x) then 0 else begin set x = -(x,1); (even 888) end
+in begin set x = 13; (odd 888) end;
+let g = let counter = 0
+        in proc (dummy)
+             begin
+               set counter = -(counter,-(0,1));
+               counter
+             end
+in let a = (g 11)
+   in let b = (g 11)
+      in -(a, b);
+let g = proc (dummy)
+          let counter = 0
+          in
+            begin
+              set counter = -(counter,-(0,1));
+              counter
+            end
+in let a = (g 11)
+   in let b = (g 11)
+      in -(a, b);
+let times4 = 0
+in begin
+     set times4 = proc (x)
+                    if is_zero(x)
+                    then 0
+                    else -((times4 -(x, 1)), -(0, 4));
+     (times4 3)
+   end;
+letrec infinite_loop (x) = (infinite_loop -(x, 1))
+in let f = proc (z) 11
+   in (f (infinite_loop 0));
+let makerec = proc(f)
+                let d = proc (x) (f (x x))
+                in (f (d d))
+in let maketimes4 = proc (f)
+                      proc (x)
+                        if is_zero(x) then 0 else -((f -(x,1)), -(0,4))
+in let times4 = (makerec maketimes4)
+   in (times4 3);
