@@ -17,6 +17,7 @@ and expression =
   | LetrecExp of expression list * expression * Ploc.t
   | BeginExp of expression list * Ploc.t
   | AssignExp of int * expression * Ploc.t
+  | LetlazyExp of expression list * expression * Ploc.t
 
 let empty_ctx () = []
 
@@ -75,7 +76,11 @@ EXTEND
     | "begin"; exps = LIST1 e SEP ";"; "end" -> fun ctx -> BeginExp (List.map (fun exp -> exp ctx) exps, loc)
     | "set"; var = LIDENT; "="; exp1 = e -> fun ctx ->
         (try AssignExp (apply_ctx var ctx, exp1 ctx, loc)
-         with Not_found -> raise (Parser_error ("the variable " ^ var ^ " is unbound", loc))) ]
+         with Not_found -> raise (Parser_error ("the variable " ^ var ^ " is unbound", loc)))
+    | "letlazy"; binds = LIST0 l; "in"; body = e -> fun ctx ->
+        let (vars, exps) = List.split binds in
+        let ctx' = List.fold_left (fun ctx var -> extend_ctx var ctx) ctx vars in
+        LetlazyExp (List.map (fun exp -> exp ctx) exps, body ctx', loc) ]
   ];
   l : [
     [ var = LIDENT; "="; exp1 = e -> (var, exp1) ]

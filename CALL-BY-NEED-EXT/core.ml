@@ -104,6 +104,10 @@ let rec value_of exp env =
     let eval1 = value_of exp1 env in
     let () = setref refer (Evaled eval1) the_store in
     NumVal 27
+  | LetlazyExp (exps, body, loc) ->
+    let erefs = List.map (fun exp1 -> value_of_operand exp1 env) exps in
+    let env' = List.fold_left (fun env eref1 -> extend_env eref1 env) env erefs in
+    value_of body env'
 
 and value_of_operand exp env =
   match exp with

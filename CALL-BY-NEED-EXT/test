@@ -80,3 +80,7 @@ in let maketimes4 = proc (f)
                         if is_zero(x) then 0 else -((f -(x,1)), -(0,4))
 in let times4 = (makerec maketimes4)
    in (times4 3);
+letrec infinite_loop (x) = (infinite_loop -(x,1))
+in letlazy a = (infinite_loop 0)
+in let f = proc (z) 11
+in (f a);
