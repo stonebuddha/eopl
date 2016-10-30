@@ -11,15 +11,20 @@ and expval =
   | BoolVal of bool
   | ProcVal of proc
   | RefVal of refer
+  | ListVal of expval list
 
 and proc = expression * environment ref
 
-let string_of_expval eval =
+let rec string_of_expval eval =
   match eval with
   | NumVal num -> string_of_int num
   | BoolVal bool -> string_of_bool bool
   | ProcVal _ -> "<proc>"
   | RefVal _ -> "<ref>"
+  | ListVal evals ->
+    match evals with
+    | [] -> "()"
+    | hd :: tl -> "(" ^ (List.fold_left (fun acc eval -> acc ^ " " ^ string_of_expval eval) (string_of_expval hd) tl) ^ ")"
 
 let empty_env () = []
 
@@ -111,6 +116,9 @@ let rec value_of exp env =
   | BeginExp (exps, loc) ->
     let eval1 = value_of (List.hd exps) env in
     List.fold_left (fun _ exp1 -> value_of exp1 env) eval1 (List.tl exps)
+  | ListExp (exps, loc) ->
+    let evals = List.map (fun exp1 -> value_of exp1 env) exps in
+    ListVal evals
 
 and apply_procedure proc arg_val =
   match proc with

@@ -19,6 +19,7 @@ and expression =
   | DerefExp of expression * Ploc.t
   | SetrefExp of expression * expression * Ploc.t
   | BeginExp of expression list * Ploc.t
+  | ListExp of expression list * Ploc.t
 
 exception Parser_error of string * Ploc.t
 

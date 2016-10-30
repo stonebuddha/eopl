@@ -66,3 +66,14 @@ in begin
      setref(deref(x), 11);
      deref(deref(x))
    end;
+let x = 4 in list(x, -(x, 1), -(x, 3));
+let a = newref(0) in
+let b = newref(1) in
+let c = newref(2) in
+let l = list(a, b, c) in
+begin
+  setref(a, 10);
+  setref(b, 20);
+  setref(c, 30);
+  l
+end;

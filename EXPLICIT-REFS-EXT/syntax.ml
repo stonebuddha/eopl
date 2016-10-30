@@ -19,6 +19,7 @@ and expression =
   | DerefExp of expression * Ploc.t
   | SetrefExp of expression * expression * Ploc.t
   | BeginExp of expression list * Ploc.t
+  | ListExp of expression list * Ploc.t
 
 let empty_ctx () = []
 
@@ -77,7 +78,8 @@ EXTEND
     | "newref"; "("; exp1 = e; ")" -> fun ctx -> NewrefExp (exp1 ctx, loc)
     | "deref"; "("; exp1 = e; ")" -> fun ctx -> DerefExp (exp1 ctx, loc)
     | "setref"; "("; exp1 = e; ","; exp2 = e; ")" -> fun ctx -> SetrefExp (exp1 ctx, exp2 ctx, loc)
-    | "begin"; exps = LIST1 e SEP ";"; "end" -> fun ctx -> BeginExp (List.map (fun exp -> exp ctx) exps, loc) ]
+    | "begin"; exps = LIST1 e SEP ";"; "end" -> fun ctx -> BeginExp (List.map (fun exp -> exp ctx) exps, loc)
+    | "list"; "("; exps = LIST0 e SEP ","; ")" -> fun ctx -> ListExp (List.map (fun exp -> exp ctx) exps, loc) ]
   ];
   l : [
     [ var = LIDENT; "="; exp1 = e -> (var, exp1) ]
