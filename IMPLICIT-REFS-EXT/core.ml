@@ -99,6 +99,14 @@ let rec value_of exp env =
     let eval1 = value_of exp1 env in
     let () = setref refer eval1 the_store in
     NumVal 27
+  | SetdynamicExp (var, exp1, body, loc) ->
+    let eval1 = value_of exp1 env in
+    let refer = apply_env env var in
+    let backup = deref refer the_store in
+    let () = setref refer eval1 the_store in
+    let eval = value_of body env in
+    let () = setref refer backup the_store in
+    eval
 
 and apply_procedure proc arg_val loc =
   match proc with

@@ -17,6 +17,7 @@ and expression =
   | LetrecExp of expression list * expression * Ploc.t
   | BeginExp of expression list * Ploc.t
   | AssignExp of int * expression * Ploc.t
+  | SetdynamicExp of int * expression * expression * Ploc.t
 
 exception Parser_error of string * Ploc.t
 

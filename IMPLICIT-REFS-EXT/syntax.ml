@@ -17,6 +17,7 @@ and expression =
   | LetrecExp of expression list * expression * Ploc.t
   | BeginExp of expression list * Ploc.t
   | AssignExp of int * expression * Ploc.t
+  | SetdynamicExp of int * expression * expression * Ploc.t
 
 let empty_ctx () = []
 
@@ -75,6 +76,9 @@ EXTEND
     | "begin"; exps = LIST1 e SEP ";"; "end" -> fun ctx -> BeginExp (List.map (fun exp -> exp ctx) exps, loc)
     | "set"; var = LIDENT; "="; exp1 = e -> fun ctx ->
         (try AssignExp (apply_ctx var ctx, exp1 ctx, loc)
+         with Not_found -> raise (Parser_error ("the variable " ^ var ^ " is unbound", loc)))
+    | "setdynamic"; var = LIDENT; "="; exp1 = e; "during"; body = e -> fun ctx ->
+        (try SetdynamicExp (apply_ctx var ctx, exp1 ctx, body ctx, loc)
          with Not_found -> raise (Parser_error ("the variable " ^ var ^ " is unbound", loc))) ]
   ];
   l : [
