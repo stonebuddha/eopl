@@ -513,6 +513,15 @@ Proof.
   value_of_equation_finisher.
 Qed.
 
+Lemma value_of_proc_equation :
+  forall fuel ctx (body : expression (S ctx)) (env : environment ctx) sz0 (st0 : naive_store sz0) env,
+    value_of (S fuel) (Proc body) st0 env = Some (Clo body env, existT _ _ st0).
+Proof.
+  intros.
+  simpl.
+  value_of_equation_finisher.
+Qed.
+
 Lemma value_of_call_equation :
   forall fuel ctx (rator : expression ctx) rand env rand_val val ctx' (body : expression (S ctx')) saved_env sz0 (st0 : naive_store sz0) sz1 st1 sz2 st2 sz3 st3,
     value_of fuel rator st0 env = Some (Clo body saved_env, existT _ sz1 st1) ->
@@ -564,7 +573,7 @@ Proof.
   value_of_equation_finisher.
 Qed.
 
-Hint Resolve value_of_const_equation value_of_diff_equation value_of_is_zero_equation value_of_if_true_equation value_of_if_false_equation value_of_var_equation value_of_let_equation value_of_call_equation value_of_newref_equation value_of_deref_equation value_of_setref_equation.
+Hint Resolve value_of_const_equation value_of_diff_equation value_of_is_zero_equation value_of_if_true_equation value_of_if_false_equation value_of_var_equation value_of_let_equation value_of_proc_equation value_of_call_equation value_of_newref_equation value_of_deref_equation value_of_setref_equation.
 Hint Constructors value_of_rel.
 
 Theorem value_of_soundness :
@@ -573,23 +582,135 @@ Theorem value_of_soundness :
     st0 = exist _ m0 pf0 ->
     value_of_rel exp env m0 val m1.
 Proof.
-Admitted.
+  intros.
+  destruct H as [ fuel ? ].
+  generalize dependent ctx.
+  generalize dependent val.
+  generalize dependent sz0.
+  generalize dependent sz1.
+  generalize dependent m0.
+  generalize dependent m1.
+  induction fuel; try discriminate.
+  intros.
+  dependent destruction exp;
+  match goal with
+  | [ H : value_of ?FUEL ?EXP ?ST ?ENV = _ |- _ ] => simpl in H
+  end;
+  repeat (
+      try match goal with
+          | [ _ : context[match value_of ?FUEL ?EXP ?ST ?ENV with Some _ => _ | None => _ end] |- _ ] => destruct (value_of FUEL EXP ST ENV) eqn:?; try discriminate
+          | [ _ : context[let (_, _) := ?X in _] |- _ ] => destruct X
+          | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ => _ | Ref _ => _ end] |- _ ] => destruct VAL; try discriminate
+          | [ _ : context[if ?B then _ else _] |- _ ] => destruct B
+          | [ _ : context[match ?ST ?LOC with Some _ => _ | None => _ end] |- _ ] => destruct (ST LOC) eqn:?; try discriminate
+          | [ _ : context[match lt_dec ?X ?Y with left _ => _ | right _ => _ end] |- _ ] => destruct (lt_dec X Y); try discriminate
+          | [ st : naive_store _ |- _ ] => destruct st
+          | [ H : Some _ = Some _ |- _ ] => inversion H; clear H
+          | [ H : exist _ _ _ = exist _ _ _ |- _ ] => inversion H; clear H
+          | [ H : existT _ _ _ = existT _ _ _ |- _ ] => inversion H; clear H
+          end;
+      simplify;
+      eauto 10).
+
+  assert (pf := a).
+  specialize (pf x).
+  simplify.
+  eauto.
+
+  assert (pf := a).
+  specialize (pf l).
+  simplify.
+  apply H in l0.
+  simplify.
+  eauto.
+Qed.
 
 Lemma fuel_incr :
-  forall fuel ctx (exp : expression ctx) env val sz0 (st0 : naive_store sz0) sz1 st1,
-    value_of fuel exp st0 env = Some (val, existT _ sz1 st1) ->
-    value_of (S fuel) exp st0 env = Some (val, existT _ _ st1).
+  forall fuel ctx (exp : expression ctx) env val sz0 m0 (pf0 : forall l, (l < sz0 -> exists val, m0 l = Some val) /\ (l >= sz0 -> m0 l = None)) sz1 m1 pf1,
+    value_of fuel exp (exist _ m0 pf0) env = Some (val, existT _ sz1 (exist _ m1 pf1)) ->
+    forall pf0, exists pf1,
+      value_of (S fuel) exp (exist (fun st => forall l, (l < sz0 -> exists val, st l = Some val) /\ (l >= sz0 -> st l = None)) m0 pf0) env = Some (val, existT _ sz1 (exist _ m1 pf1)).
 Proof.
-Admitted.
+  intros.
+  generalize dependent ctx.
+  generalize dependent val.
+  generalize dependent sz0.
+  generalize dependent sz1.
+  generalize dependent m1.
+  generalize dependent m0.
+  induction fuel; try discriminate.
+  intros.
+  dependent destruction exp;
+  match goal with
+  | [ H : value_of ?FUEL ?EXP ?ST ?ENV = _ |- _ ] => simpl in H
+  end;
+  repeat (
+      try match goal with
+          | [ _ : context[match value_of ?FUEL ?EXP ?ST ?ENV with Some _ => _ | None => _ end] |- _ ] => destruct (value_of FUEL EXP ST ENV) eqn:?; try discriminate
+          | [ _ : context[let (_, _) := ?X in _] |- _ ] => destruct X
+          | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ => _ | Ref _ => _ end] |- _ ] => destruct VAL; try discriminate
+          | [ _ : context[if ?B then _ else _] |- _ ] => destruct B
+          | [ _ : context[match ?ST ?LOC with Some _ => _ | None => _ end] |- _ ] => destruct (ST LOC) eqn:?; try discriminate
+          | [ _ : context[match lt_dec ?X ?Y with left _ => _ | right _ => _ end] |- _ ] => destruct (lt_dec X Y); try discriminate
+          | [ st : naive_store _ |- _ ] => destruct st
+          | [ H : Some _ = Some _ |- _ ] => inversion H; clear H
+          end;
+      simplify;
+      eauto 10).
+
+  apply IHfuel with (pf2 := pf2) in Heqo; auto; simplify.
+  apply IHfuel with (pf2 := x1) in Heqo0; auto; simplify.
+  eauto.
+
+  apply IHfuel with (pf2 := pf2) in Heqo; auto; simplify.
+  eauto.
+
+  apply IHfuel with (pf2 := pf2) in Heqo; auto; simplify.
+  apply IHfuel with (pf2 := x1) in H; auto; simplify.
+  eauto.
+
+  apply IHfuel with (pf2 := pf2) in Heqo; auto; simplify.
+  apply IHfuel with (pf2 := x1) in H; auto; simplify.
+  eauto.
+
+  apply IHfuel with (pf2 := pf2) in Heqo; auto; simplify.
+  apply IHfuel with (pf2 := x1) in H; auto; simplify.
+  eauto.
+
+  apply IHfuel with (pf2 := pf2) in Heqo; auto; simplify.
+  apply IHfuel with (pf2 := x3) in Heqo0; auto; simplify.
+  apply IHfuel with (pf2 := x4) in H; auto; simplify.
+  eauto.
+
+  apply IHfuel with (pf2 := pf2) in Heqo; auto; simplify.
+  eauto.
+
+  apply IHfuel with (pf2 := pf2) in Heqo; auto; simplify.
+  eauto.
+
+  apply IHfuel with (pf2 := pf2) in Heqo; auto; simplify.
+  apply IHfuel with (pf2 := x3) in Heqo0; auto; simplify.
+  eauto.
+Qed.
 
 Lemma fuel_order :
-  forall ctx (exp : expression ctx) env val fuel fuel' sz0 (st0 : naive_store sz0) sz1 st1,
-    value_of fuel exp st0 env = Some (val, existT _ sz1 st1) ->
+  forall ctx (exp : expression ctx) env val fuel fuel' sz0 m0 (pf0 : forall l, (l < sz0 -> exists val, m0 l = Some val) /\ (l >= sz0 -> m0 l = None)) sz1 m1 pf1,
+    value_of fuel exp (exist _ m0 pf0) env = Some (val, existT _ sz1 (exist _ m1 pf1)) ->
     fuel <= fuel' ->
-    value_of fuel' exp st0 env = Some (val, existT _ sz1 st1).
+    exists pf1,
+    value_of fuel' exp (exist (fun st => forall l, (l < sz0 -> exists val, st l = Some val) /\ (l >= sz0 -> st l = None)) m0 pf0) env = Some (val, existT _ sz1 (exist _ m1 pf1)).
 Proof.
   Hint Resolve fuel_incr.
-  induction 2; auto.
+  intros.
+  generalize dependent ctx.
+  generalize dependent val.
+  generalize dependent sz0.
+  generalize dependent m0.
+  generalize dependent sz1.
+  generalize dependent m1.
+  induction H0; intros.
+  eauto.
+  apply IHle in H; simplify; eauto.
 Qed.
 
 Lemma le_max_1 : forall a b c, a <= max (max a b) c.
