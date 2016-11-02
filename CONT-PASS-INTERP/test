@@ -1,0 +1,29 @@
+let a = 5 in
+  let b = 6 in
+    -(b, -(a, 10));
+-(123, 44);
+is_zero(0);
+is_zero(1);
+let a = 5 in
+  if is_zero(a) then 5 else 4;
+let a = -(5, 5) in
+  if is_zero(a) then 5 else 4;
+val a = 5;
+val b = 6;
+-(b, -(a, 10));
+if is_zero(a) then 5 else 4;
+let a = -(a, a) in
+  if is_zero(a) then 5 else 4;
+let f = proc (x) -(x, 11) in (f (f 77));
+(proc (f) (f (f 77)) proc (x) -(x, 11));
+let x = 200 in let f = proc (z) -(z, x) in let x = 100 in let g = proc (z) -(z, x) in -((f 1), (g 1));
+letrec double (x) = if is_zero(x) then 0 else -((double -(x, 1)), -(0, 2))
+in (double 6);
+val minus_two = -(0, 2);
+fun double (x) = if is_zero(x) then 0 else -((double -(x, 1)), minus_two);
+(double -(10, minus_two));
+let x = 30 in let x = -(x, 1) y = -(x, 2) in -(x, y);
+letrec
+  even (x) = if is_zero(x) then 1 else (odd -(x, 1))
+  odd (x) = if is_zero(x) then 0 else (even -(x, 1))
+in (odd 13);
