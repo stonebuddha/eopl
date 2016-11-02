@@ -3,7 +3,7 @@ type program =
 
 and top_level =
   | ValTop of string * expression
-  | FunTop of string * expression
+  | FunTop of string * int * expression
 
 and expression =
   | ConstExp of int * Ploc.t
@@ -12,9 +12,9 @@ and expression =
   | IfExp of expression * expression * expression * Ploc.t
   | VarExp of int * Ploc.t
   | LetExp of expression list * expression * Ploc.t
-  | ProcExp of expression * Ploc.t
-  | CallExp of expression * expression * Ploc.t
-  | LetrecExp of expression list * expression * Ploc.t
+  | ProcExp of int * expression * Ploc.t
+  | CallExp of expression * expression list * Ploc.t
+  | LetrecExp of (int * expression) list * expression * Ploc.t
 
 let empty_ctx () = []
 
@@ -49,7 +49,7 @@ EXTEND
   t : [
     [ exp1 = e; ";" -> fun ctx -> (ValTop ("it", exp1 ctx), extend_ctx "it" ctx)
     | "val"; var = LIDENT; "="; exp1 = e; ";" -> fun ctx -> (ValTop (var, exp1 ctx), extend_ctx var ctx)
-    | "fun"; p_name = LIDENT; "(";  b_var = LIDENT; ")"; "="; p_body = e; ";" -> fun ctx -> (FunTop (p_name, p_body (extend_ctx b_var (extend_ctx p_name ctx))), extend_ctx p_name ctx) ]
+    | "fun"; p_name = LIDENT; "(";  b_vars = LIST0 LIDENT SEP ","; ")"; "="; p_body = e; ";" -> fun ctx -> (FunTop (p_name, List.length b_vars, p_body (List.fold_left (fun ctx b_var -> extend_ctx b_var ctx) (extend_ctx p_name ctx) b_vars)), extend_ctx p_name ctx) ]
   ];
   e : [
     [ num = INT -> fun ctx -> ConstExp (int_of_string num, loc)
@@ -63,18 +63,19 @@ EXTEND
         let (vars, exps) = List.split binds in
         let ctx' = List.fold_left (fun ctx var -> extend_ctx var ctx) ctx vars in
         LetExp (List.map (fun exp -> exp ctx) exps, body ctx', loc)
-    | "proc"; "("; var = LIDENT; ")"; body = e -> fun ctx -> ProcExp (body (extend_ctx var ctx), loc)
-    | "("; rator = e; rand = e; ")" -> fun ctx -> CallExp (rator ctx, rand ctx, loc)
+    | "proc"; "("; vars = LIST0 LIDENT SEP ","; ")"; body = e -> fun ctx ->
+        ProcExp (List.length vars, body (List.fold_left (fun ctx var -> extend_ctx var ctx) ctx vars), loc)
+    | "("; rator = e; rands = LIST0 e; ")" -> fun ctx -> CallExp (rator ctx, List.map (fun exp -> exp ctx) rands, loc)
     | "letrec"; binds = LIST0 r; "in"; letrec_body = e -> fun ctx ->
         let (p_names, binds) = List.split binds in
         let ctx' = List.fold_left (fun ctx var -> extend_ctx var ctx) ctx p_names in
-        let p_bodies = List.map (fun (b_var, p_body) -> p_body (extend_ctx b_var ctx')) binds in
+        let p_bodies = List.map (fun (b_vars, p_body) -> (List.length b_vars, p_body (List.fold_left (fun ctx' b_var -> extend_ctx b_var ctx') ctx' b_vars))) binds in
         LetrecExp (p_bodies, letrec_body ctx', loc) ]
   ];
   l : [
     [ var = LIDENT; "="; exp1 = e -> (var, exp1) ]
   ];
   r : [
-    [ p_name = LIDENT; "("; b_var = LIDENT; ")"; "="; p_body = e -> (p_name, (b_var, p_body)) ]
+    [ p_name = LIDENT; "("; b_vars = LIST0 LIDENT SEP ","; ")"; "="; p_body = e -> (p_name, (b_vars, p_body)) ]
   ];
 END
