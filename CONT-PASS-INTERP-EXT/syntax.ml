@@ -15,6 +15,7 @@ and expression =
   | ProcExp of int * expression * Ploc.t
   | CallExp of expression * expression list * Ploc.t
   | LetrecExp of (int * expression) list * expression * Ploc.t
+  | AssignExp of int * expression * Ploc.t
 
 let empty_ctx () = []
 
@@ -70,7 +71,10 @@ EXTEND
         let (p_names, binds) = List.split binds in
         let ctx' = List.fold_left (fun ctx var -> extend_ctx var ctx) ctx p_names in
         let p_bodies = List.map (fun (b_vars, p_body) -> (List.length b_vars, p_body (List.fold_left (fun ctx' b_var -> extend_ctx b_var ctx') ctx' b_vars))) binds in
-        LetrecExp (p_bodies, letrec_body ctx', loc) ]
+        LetrecExp (p_bodies, letrec_body ctx', loc)
+    | "set"; var = LIDENT; "="; exp1 = e -> fun ctx ->
+        (try AssignExp (apply_ctx var ctx, exp1 ctx, loc)
+         with Not_found -> raise (Parser_error ("the variable " ^ var ^ " is unbound", loc))) ]
   ];
   l : [
     [ var = LIDENT; "="; exp1 = e -> (var, exp1) ]

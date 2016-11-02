@@ -34,3 +34,13 @@ fun mult (x, y) =
   else -((mult -(x, 1) y), -(0, y));
 letrec fac (n, ret) = if is_zero(n) then (ret 1) else (fac -(n, 1) proc (ans) (ret (mult n ans)))
 in (fac 10 proc (ans) ans);
+val a = 1;
+a;
+set a = (double a);
+a;
+val b = 10;
+a;
+b;
+set b = 11;
+a;
+b;
