@@ -16,6 +16,7 @@ and expression =
   | CallExp of expression * expression list * Ploc.t
   | LetrecExp of (int * expression) list * expression * Ploc.t
   | AssignExp of int * expression * Ploc.t
+  | BeginExp of expression list * Ploc.t
 
 let empty_ctx () = []
 
@@ -74,7 +75,8 @@ EXTEND
         LetrecExp (p_bodies, letrec_body ctx', loc)
     | "set"; var = LIDENT; "="; exp1 = e -> fun ctx ->
         (try AssignExp (apply_ctx var ctx, exp1 ctx, loc)
-         with Not_found -> raise (Parser_error ("the variable " ^ var ^ " is unbound", loc))) ]
+         with Not_found -> raise (Parser_error ("the variable " ^ var ^ " is unbound", loc)))
+    | "begin"; exps = LIST1 e SEP ";"; "end" -> fun ctx -> BeginExp (List.map (fun exp -> exp ctx) exps, loc) ]
   ];
   l : [
     [ var = LIDENT; "="; exp1 = e -> (var, exp1) ]

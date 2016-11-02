@@ -61,6 +61,7 @@ type continuation =
   | CallRatorCont of expression list * environment * continuation * Ploc.t
   | CallRandCont of expval list * expression list * proc * environment * continuation * Ploc.t
   | AssignCont of refer * continuation * Ploc.t
+  | BeginCont of expression list * environment * continuation * Ploc.t
 
 let rec value_of_k exp env cont =
   match exp with
@@ -87,6 +88,8 @@ let rec value_of_k exp env cont =
     value_of_k letrec_body (!saved_env) cont
   | AssignExp (var, exp1, loc) ->
     value_of_k exp1 env (AssignCont (apply_env env var, cont, loc))
+  | BeginExp (exps, loc) ->
+    value_of_k (List.hd exps) env (BeginCont (List.tl exps, env, cont, loc))
 
 and apply_procedure_k proc arg_vals call_site cont =
   match proc with
@@ -142,6 +145,11 @@ and apply_cont cont eval =
     let eval1 = eval in
     let () = setref refer eval1 the_store in
     apply_cont saved_cont (NumVal 27)
+  | BeginCont (exps, env, saved_cont, loc) ->
+    let eval1 = eval in
+    (match exps with
+     | [] -> apply_cont saved_cont eval1
+     | exp1 :: exps' -> value_of_k exp1 env (BeginCont (exps', env, saved_cont, loc)))
 
 let value_of_top_level top env =
   match top with
