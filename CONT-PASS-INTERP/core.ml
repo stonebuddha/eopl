@@ -10,7 +10,6 @@ and expval =
   | NumVal of int
   | BoolVal of bool
   | ProcVal of proc
-  | RefVal of refer
 
 and proc = expression * environment ref
 
@@ -19,7 +18,6 @@ let string_of_expval eval =
   | NumVal num -> string_of_int num
   | BoolVal bool -> string_of_bool bool
   | ProcVal _ -> "<proc>"
-  | RefVal _ -> "<ref>"
 
 let empty_env () = []
 
