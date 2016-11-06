@@ -76,3 +76,7 @@ in begin
                     else -((times4 -(x, 1)), -(0, 4));
      (times4 3)
    end;
+letrec test (n) = if is_zero(n) then 0 else -(n, -(0, (test -(n, 1))))
+in (test 1000000);
+letrec test (n, ret) = if is_zero(n) then ret else (test -(n, 1) -(ret, -(0, n)))
+in (test 1000000 0);

@@ -97,3 +97,7 @@ letrec
   odd (x) = if is_zero(x) then 0 else (even -(x, 1))
 in (odd 13);
 let x = 30 in let x = -(x, 1) y = -(x, 2) in -(x, y);
+letrec test (n) = if is_zero(n) then 0 else -(n, -(0, (test -(n, 1))))
+in (test 10000);
+letrec test (n, ret) = if is_zero(n) then ret else (test -(n, 1) -(ret, -(0, n)))
+in (test 10000 0);

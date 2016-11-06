@@ -25,7 +25,7 @@ let extend_env refer env = refer :: env
 
 let apply_env env var = List.nth env var
 
-let default_store_size = 1024 * 1024
+let default_store_size = 256 * 1024 * 1024
 
 let empty_store () = (ref 0, ref (Array.make 0 (NumVal 0)))
 
