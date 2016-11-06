@@ -1,0 +1,6 @@
+[package]
+name = "rusty_trampolined_interp"
+version = "0.1.0"
+authors = ["Di Wang <wayne.wangdi@yandex.com>"]
+
+[dependencies]
