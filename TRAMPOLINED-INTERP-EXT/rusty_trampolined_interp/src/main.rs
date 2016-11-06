@@ -14,4 +14,6 @@ fn main() {
     exp.eval().map(|val| println!("{}", val));
     let exp = Letrec(Rc::new(Proc(Rc::new(If(Rc::new(IsZero(Rc::new(Var(1)))), Rc::new(Var(0)), Rc::new(Call(Rc::new(Call(Rc::new(Var(2)), Rc::new(Diff(Rc::new(Var(1)), Rc::new(Const(1)))))), Rc::new(Diff(Rc::new(Var(0)), Rc::new(Diff(Rc::new(Const(0)), Rc::new(Var(1)))))))))))), Rc::new(Call(Rc::new(Call(Rc::new(Var(0)), Rc::new(Const(1000000)))), Rc::new(Const(0)))));
     exp.eval().map(|val| println!("{}", val));
+    let exp = Letrec(Rc::new(If(Rc::new(IsZero(Rc::new(Var(0)))), Rc::new(Const(1)), Rc::new(If(Rc::new(IsZero(Rc::new(Diff(Rc::new(Var(0)), Rc::new(Const(1)))))), Rc::new(Const(1)), Rc::new(Diff(Rc::new(Call(Rc::new(Var(1)), Rc::new(Diff(Rc::new(Var(0)), Rc::new(Const(1)))))), Rc::new(Diff(Rc::new(Const(0)), Rc::new(Call(Rc::new(Var(1)), Rc::new(Diff(Rc::new(Var(0)), Rc::new(Const(2)))))))))))))), Rc::new(Call(Rc::new(Var(0)), Rc::new(Const(30)))));
+    exp.eval().map(|val| println!("{}", val));
 }
