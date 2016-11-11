@@ -46,6 +46,7 @@ let g_env : (environment option) ref = ref None
 let g_cont : (continuation option) ref = ref None
 let g_eval : (expval option) ref = ref None
 let g_proc : (proc option) ref = ref None
+let g_pc : (bounce option) ref = ref None
 
 let get op =
   match op with
@@ -99,10 +100,10 @@ let rec value_of_k () =
 
 and apply_procedure_k () =
   match get (!g_proc) with
-  | (body, saved_env) -> Jump (fun () ->
-      let () = g_exp := Some body in
-      let () = g_env := Some (extend_env (get (!g_eval)) !saved_env) in
-      value_of_k ())
+  | (body, saved_env) ->
+    let () = g_exp := Some body in
+    let () = g_env := Some (extend_env (get (!g_eval)) !saved_env) in
+    Jump value_of_k
 
 and apply_cont () =
   match get (!g_cont) with
@@ -174,19 +175,21 @@ and apply_cont () =
     let () = g_eval := Some rand_val in
     apply_procedure_k ()
 
-let rec trampoline b =
-  match b with
+let rec trampoline () =
+  match get (!g_pc) with
   | Ans eval -> eval
-  | Jump fn -> trampoline (fn ())
+  | Jump fn ->
+    let () = g_pc := Some (fn ()) in
+    trampoline ()
 
 let value_of_top_level top env =
   match top with
   | ValTop (var, exp1) ->
-    let eval1 = trampoline (
-        let () = g_cont := Some EndCont in
-        let () = g_exp := Some exp1 in
-        let () = g_env := Some env in
-        value_of_k ()) in
+    let () = g_cont := Some EndCont in
+    let () = g_exp := Some exp1 in
+    let () = g_env := Some env in
+    let () = g_pc := Some (Jump value_of_k) in
+    let eval1 = trampoline () in
     let () = print_endline ("val " ^ var ^ " = " ^ string_of_expval eval1 ^ ";") in
     extend_env eval1 env
   | FunTop (p_name, p_body) ->
