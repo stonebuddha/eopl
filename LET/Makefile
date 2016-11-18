@@ -17,7 +17,7 @@ main.cmo: syntax.cmi core.cmi
 	ocamlc -c -I `camlp5 -where` -pp 'camlp5o pa_extend.cmo' $<
 
 proof: proof.v
-	coqc $<
+	coqc -R ../common Common $<
 
 clean::
 	rm -rf *.exe *.cmi *.cmo *.vo *.glob
