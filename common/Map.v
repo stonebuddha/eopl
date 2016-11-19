@@ -8,7 +8,7 @@ Definition empty K V : fmap K V := fun _ => None.
 Section decide.
   Variable P : Prop.
 
-  Definition decide := excluded_middle_informative P.
+  Definition decide := excluded_middle_informative.
 End decide.
 
 Definition add K V (m : fmap K V) k v : fmap K V:=
