@@ -1,6 +1,6 @@
 OBJS = syntax.cmo core.cmo main.cmo
 
-.PHONY: proof
+.PHONY: proof clean
 
 LET.exe: $(OBJS)
 	@echo Linking $@
@@ -23,5 +23,5 @@ proof: proof.vo
 proof.vo: proof.v
 	coqc -R ../common Common $<
 
-clean::
+clean:
 	rm -rf *.exe *.cmi *.cmo *.vo *.glob

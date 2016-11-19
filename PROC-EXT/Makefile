@@ -1,5 +1,7 @@
 OBJS = support.cmo syntax.cmo core.cmo main.cmo
 
+.PHONY: clean
+
 PROC-EXT.exe: $(OBJS)
 	@echo Linking $@
 	ocamlc -o $@ -I `camlp5 -where` gramlib.cma $(OBJS)
@@ -18,8 +20,5 @@ main.cmo: support.cmi syntax.cmi core.cmi
 %.cmo: %.ml
 	ocamlc -c -I `camlp5 -where` -pp 'camlp5o pa_extend.cmo' $<
 
-proof: proof.v
-	coqc $<
-
-clean::
-	rm -rf *.exe *.cmi *.cmo *.vo *.glob
+clean:
+	rm -rf *.exe *.cmi *.cmo

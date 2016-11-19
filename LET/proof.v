@@ -1,4 +1,4 @@
-Require Import Bool ZArith Arith List ClassicalEpsilon.
+Require Import Bool ZArith Arith List.
 Require Import Var Map.
 Set Implicit Arguments.
 
@@ -24,17 +24,17 @@ Module LetSpec.
 
   Inductive value_of_rel : expression -> fmap var expval -> expval -> Prop :=
   | VrelConst :
-      forall num env,
-        value_of_rel (ExpConst num) env (ValNum (Z.of_nat num))
+      forall n env,
+        value_of_rel (ExpConst n) env (ValNum (Z.of_nat n))
   | VrelDiff :
-      forall exp1 exp2 num1 num2 env,
-        value_of_rel exp1 env (ValNum num1) ->
-        value_of_rel exp2 env (ValNum num2) ->
-        value_of_rel (ExpDiff exp1 exp2) env (ValNum (num1 - num2))
+      forall exp1 exp2 n1 n2 env,
+        value_of_rel exp1 env (ValNum n1) ->
+        value_of_rel exp2 env (ValNum n2) ->
+        value_of_rel (ExpDiff exp1 exp2) env (ValNum (n1 - n2))
   | VrelIsZero :
-      forall exp1 num1 env,
-        value_of_rel exp1 env (ValNum num1) ->
-        value_of_rel (ExpIsZero exp1) env (ValBool (Z.eqb num1 0))
+      forall exp1 n1 env,
+        value_of_rel exp1 env (ValNum n1) ->
+        value_of_rel (ExpIsZero exp1) env (ValBool (Z.eqb n1 0))
   | VrelIfTrue :
       forall exp1 exp2 exp3 val2 env,
         value_of_rel exp1 env (ValBool true) ->
@@ -101,18 +101,18 @@ Module LetImpl.
 
   Function value_of (exp : expression) (env : environment) : option expval :=
     match exp with
-    | ExpConst num => Some (ValNum (Z.of_nat num))
+    | ExpConst n => Some (ValNum (Z.of_nat n))
     | ExpDiff exp1 exp2 =>
       val1 <- value_of exp1 env;
         val2 <- value_of exp2 env;
         match (val1, val2) with
-        | (ValNum num1, ValNum num2) => Some (ValNum (num1 - num2))
+        | (ValNum n1, ValNum n2) => Some (ValNum (n1 - n2))
         | _ => None
         end
     | ExpIsZero exp1 =>
       val1 <- value_of exp1 env;
         match val1 with
-        | ValNum num1 => Some (ValBool (Z.eqb num1 0))
+        | ValNum n1 => Some (ValBool (Z.eqb n1 0))
         | _ => None
         end
     | ExpIf exp1 exp2 exp3 =>
@@ -139,10 +139,10 @@ Module LetImpl.
       repeat match goal with
              | [ _ : context[match value_of ?EXP ?ENV with Some _ => _ | None => _ end] |- _ ] =>
                destruct (value_of EXP ENV) eqn:?; try congruence
-             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ end] |- _ ] =>
-               destruct VAL; try congruence
              | [ _ : context[if ?B then _ else _] |- _ ] =>
                destruct B
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ end] |- _ ] =>
+               destruct VAL; try congruence
              | [ H : Some _ = Some _ |- _ ] =>
                inversion H; clear H; subst
              | [ H : implemented _ _ |- _ ] =>
