@@ -186,8 +186,8 @@ Module LetImpl.
     end.
 
   Hint Extern 3 => match goal with
-                  | [ H : is_num (ValBool _) |- _ ] => inversion H
-                  | [ H : is_bool (ValNum _) |- _ ] => inversion H
+                  | [ H : is_num (ValBool _) |- _ ] => inversion H; clear H
+                  | [ H : is_bool (ValNum _) |- _ ] => inversion H; clear H
                   | [ |- context[is_num (ValBool _)] ] => intuition
                   | [ |- context[is_bool (ValNum _)] ] => intuition
                   | [ H : ~ _ |- _ ] => contradict H
