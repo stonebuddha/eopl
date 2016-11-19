@@ -21,7 +21,7 @@ main.cmo: syntax.cmi core.cmi
 proof: proof.vo
 
 proof.vo: proof.v
-	coqc -R ../common Common $<
+	coqc $<
 
 clean:
 	rm -rf *.exe *.cmi *.cmo *.vo *.glob
