@@ -201,8 +201,7 @@ Module LetImpl.
     intros env exp.
     generalize dependent env.
     induction exp; intros; rewrite value_of_equation in *; subst;
-      repeat
-        (try match goal with
+      repeat match goal with
              | [ |- context[match value_of ?ENV ?EXP with BehVal _ => _ | BehErr => _ end] ] =>
                destruct (value_of ENV EXP) eqn:?; try congruence
              | [ |- context[match ?VAL with ValNum _ => _ | ValBool _ => _ end] ] =>
@@ -210,39 +209,68 @@ Module LetImpl.
              | [ |- context[if ?B then _ else _] ] =>
                destruct B
              end;
-         eauto 10).
+      eauto 7.
   Qed.
 
   Ltac invert' H := inversion H; clear H; subst.
+
+  Function value_of_term (env : environment) (tm : term) : behavior :=
+    match tm with
+    | TmExp exp => value_of env exp
+    | TmDiff1 beh1 exp2 =>
+      val1 <- beh1;
+        val2 <- value_of env exp2;
+        match (val1, val2) with
+        | (ValNum n1, ValNum n2) => ValNum (n1 - n2)
+        | _ => BehErr
+        end
+    | TmDiff2 val1 beh2 =>
+      val2 <- beh2;
+        match (val1, val2) with
+        | (ValNum n1, ValNum n2) => ValNum (n1 - n2)
+        | _ => BehErr
+        end
+    | TmIsZero1 beh1 =>
+      val1 <- beh1;
+        match val1 with
+        | ValNum n1 => ValBool (Z.eqb n1 0)
+        | _ => BehErr
+        end
+    | TmIf1 beh1 exp2 exp3 =>
+      val1 <- beh1;
+        match val1 with
+        | ValBool true => value_of env exp2
+        | ValBool false => value_of env exp3
+        | _ => BehErr
+        end
+    | TmLet1 x beh1 exp2 =>
+      val1 <- beh1;
+        value_of (extend_env env x val1) exp2
+    end.
+
+  Theorem value_of_term_completeness :
+    forall env tm beh,
+      value_of_rel env tm beh ->
+      value_of_term env tm = beh.
+  Proof.
+    induction 1; simpl in *; subst;
+    repeat match goal with
+           | [ H : abort _ |- _ ] =>
+             invert' H
+           | [ |- context[match ?VAL with ValNum _ => _ | ValBool _ => _ end] ] =>
+             destruct VAL; try congruence
+           end;
+    eauto.
+  Qed.
 
   Theorem value_of_completeness :
     forall env exp beh,
       value_of_rel env exp beh ->
       value_of env exp = beh.
   Proof.
-    intros env exp.
-    generalize dependent env.
-    induction exp; intros; rewrite value_of_equation; inversion H; clear H; subst; eauto;
-    repeat
-      (try match goal with
-           | [ H : value_of_rel _ (TmDiff1 _ _) _ |- _ ] =>
-             invert' H
-           | [ H : value_of_rel _ (TmDiff2 _ _) _ |- _ ] =>
-             invert' H
-           | [ H : value_of_rel _ (TmIsZero1 _) _ |- _ ] =>
-             invert' H
-           | [ H : value_of_rel _ (TmIf1 _ _ _) _ |- _ ] =>
-             invert' H
-           | [ H : value_of_rel _ (TmLet1 _ _ _) _ |- _ ] =>
-             invert' H
-           | [ IH : forall _ _, value_of_rel _ ?EXP _ -> _, H : value_of_rel _ ?EXP _ |- _ ] =>
-             apply IH in H; rewrite H
-           | [ H : abort _ |- _ ] =>
-             invert' H
-           | [ |- context[match ?VAL with ValNum _ => _ | ValBool _ => _ end] ] =>
-             destruct VAL; try congruence
-           end;
-       eauto 10).
+    intros.
+    apply value_of_term_completeness in H.
+    auto.
   Qed.
 
   Hint Resolve value_of_soundness value_of_completeness.
