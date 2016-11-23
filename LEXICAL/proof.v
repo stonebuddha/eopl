@@ -430,53 +430,135 @@ Module TranslationImpl.
       L.ExpCall exp1 exp2
     end.
 
-  Inductive expval_simu : P.expval -> L.expval -> Prop :=
-  | SimuNum : forall n, expval_simu (P.ValNum n) (L.ValNum n)
-  | SimuBool : forall b, expval_simu (P.ValBool b) (L.ValBool b)
-  | SimuClo :
-      forall fv x (exp1 : P.expression (x :: fv)) saved_env saved_env',
-        environment_simu saved_env saved_env' ->
-        expval_simu (P.ValClo exp1 saved_env) (L.ValClo (translation_of exp1) saved_env')
+  Function translation_of_expval (val : P.expval) : L.expval :=
+    match val with
+    | P.ValNum n => L.ValNum n
+    | P.ValBool b => L.ValBool b
+    | P.ValClo exp1 saved_env => L.ValClo (translation_of exp1) (translation_of_environment saved_env)
+    end
 
-  with environment_simu : forall fv, P.environment fv -> L.environment (length fv) -> Prop :=
-       | SimuEmpty : environment_simu P.EnvEmpty L.EnvEmpty
-       | SimuExtend :
-           forall val val' fv x (env : P.environment fv) env',
-             expval_simu val val' ->
-             environment_simu env env' ->
-             environment_simu (P.EnvExtend x val env) (L.EnvExtend val' env').
+  with translation_of_environment {fv : list var} (env : P.environment fv) : L.environment (length fv) :=
+         match env with
+         | P.EnvEmpty => L.EnvEmpty
+         | P.EnvExtend x val env' => L.EnvExtend (translation_of_expval val) (translation_of_environment env')
+         end.
 
-  Inductive behavior_simu : P.behavior -> L.behavior -> Prop :=
-  | SimuVal :
-      forall val val',
-        expval_simu val val' ->
-        behavior_simu (P.BehVal val) (L.BehVal val')
-  | SimuErr : behavior_simu P.BehErr L.BehErr.
+  Definition translation_of_behavior (beh : P.behavior) : L.behavior :=
+    match beh with
+    | P.BehVal val => L.BehVal (translation_of_expval val)
+    | P.BehErr => L.BehErr
+    end.
+
+  Definition translation_of_term {fv : list var} (tm : P.term fv) : L.term (length fv) :=
+    match tm in (P.term fv) with
+    | P.TmExp exp =>
+      let exp := translation_of exp in
+      L.TmExp exp
+    | P.TmDiff1 beh1 exp2 =>
+      let beh1 := translation_of_behavior beh1 in
+      let exp2 := translation_of exp2 in
+      L.TmDiff1 beh1 exp2
+    | P.TmDiff2 fv val1 beh2 =>
+      let val1 := translation_of_expval val1 in
+      let beh2 := translation_of_behavior beh2 in
+      L.TmDiff2 (length fv) val1 beh2
+    | P.TmIsZero1 fv beh1 =>
+      let beh1 := translation_of_behavior beh1 in
+      L.TmIsZero1 (length fv) beh1
+    | P.TmIf1 beh1 exp2 exp3 =>
+      let beh1 := translation_of_behavior beh1 in
+      let exp2 := translation_of exp2 in
+      let exp3 := translation_of exp3 in
+      L.TmIf1 beh1 exp2 exp3
+    | P.TmLet1 beh1 exp2 =>
+      let beh1 := translation_of_behavior beh1 in
+      let exp2 := translation_of exp2 in
+      L.TmLet1 beh1 exp2
+    | P.TmCall1 beh1 exp2 =>
+      let beh1 := translation_of_behavior beh1 in
+      let exp2 := translation_of exp2 in
+      L.TmCall1 beh1 exp2
+    | P.TmCall2 fv val1 beh2 =>
+      let val1 := translation_of_expval val1 in
+      let beh2 := translation_of_behavior beh2 in
+      L.TmCall2 (length fv) val1 beh2
+    end.
+
+  Hint Resolve eq_nat_dec.
+
+  Ltac invert' H := inversion H; clear H; subst.
+  Ltac existT_invert' H := apply inj_pair2_eq_dec in H; eauto; subst.
+
+  Theorem translation_of_term_soundness :
+    forall fv (env : P.environment fv) env' tm tm' beh beh',
+      translation_of_environment env = env' ->
+      translation_of_term tm = tm' ->
+      translation_of_behavior beh = beh' ->
+      L.value_of_rel env' tm' beh' ->
+      P.value_of_rel env tm beh.
+  Proof.
+    intros.
+    generalize dependent env.
+    generalize dependent tm.
+    generalize dependent beh.
+    dependent induction H2; intros.
+
+    unfold translation_of_behavior in *.
+    destruct beh; try congruence.
+    unfold translation_of_term in *.
+    dependent destruction tm; try discriminate.
+    invert' H1.
+    invert' H0.
+    existT_invert' H1.
+    rewrite translation_of_expval_equation in *.
+    destruct e; try congruence.
+    invert' H3.
+    rewrite translation_of_equation in *.
+    destruct e0; try discriminate.
+    invert' H1.
+    eauto.
+    destruct (index fv x i); discriminate.
+  Admitted.
 
   Theorem translation_of_soundness :
     forall (exp : P.expression nil) exp' beh beh',
       translation_of exp = exp' ->
-      behavior_simu beh beh' ->
+      translation_of_behavior beh = beh' ->
       L.value_of_rel L.EnvEmpty (L.TmExp exp') beh' ->
       P.value_of_rel P.EnvEmpty (P.TmExp exp) beh.
   Proof.
-  Admitted.
+    intros; simpl; subst; eapply translation_of_term_soundness; eauto.
+  Qed.
 
+  Theorem translation_of_term_completeness :
+    forall fv (env : P.environment fv) env' tm tm' beh beh',
+      translation_of_environment env = env' ->
+      translation_of_term tm = tm' ->
+      translation_of_behavior beh = beh' ->
+      P.value_of_rel env tm beh ->
+      L.value_of_rel env' tm' beh'.
+  Proof.
+  Admitted.
+    
   Theorem translation_of_completeness :
     forall (exp : P.expression nil) exp' beh beh',
       translation_of exp = exp' ->
-      behavior_simu beh beh' ->
+      translation_of_behavior beh = beh' ->
       P.value_of_rel P.EnvEmpty (P.TmExp exp) beh ->
       L.value_of_rel L.EnvEmpty (L.TmExp exp') beh'.
   Proof.
-  Admitted.
+    intros.
+    assert (translation_of_environment P.EnvEmpty = L.EnvEmpty); eauto.
+    eapply translation_of_term_completeness in H2; eauto.
+    simpl; subst; eauto.
+  Qed.
 
   Hint Resolve translation_of_soundness translation_of_completeness.
 
   Theorem translation_of_correctness :
     forall (exp : P.expression nil) exp' beh beh',
       translation_of exp = exp' ->
-      behavior_simu beh beh' ->
+      translation_of_behavior beh = beh' ->
       L.value_of_rel L.EnvEmpty (L.TmExp exp') beh' <->
       P.value_of_rel P.EnvEmpty (P.TmExp exp) beh.
   Proof.
