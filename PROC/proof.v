@@ -600,13 +600,27 @@ Module ProcImpl.
     induction 2; auto.
   Qed.
 
+  Hint Resolve fuel_order.
+
   Lemma fuel_order_tm :
     forall fuel env tm beh fuel',
       value_of_term fuel env tm = Some beh ->
       fuel <= fuel' ->
       value_of_term fuel' env tm = Some beh.
   Proof.
-  Admitted.
+    intros; destruct tm; simpl in *; eauto;
+    repeat match goal with
+           | [ _ : context[match value_of ?FUEL ?ENV ?EXP with Some _ => _ | None => _ end] |- _ ] =>
+             destruct (value_of FUEL ENV EXP) eqn:T; try congruence; apply fuel_order with (fuel' := fuel') in T; eauto; rewrite T
+           | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ | BehDiv => _ end] |- _ ] =>
+             destruct BEH; try congruence
+           | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
+             destruct VAL; try congruence
+           | [ _ : context[if ?B then _ else _] |- _ ] =>
+             destruct B
+           end;
+      eauto.
+  Qed.
 
   Lemma le_max_1 : forall a b c, a <= max (max a b) c.
     intros.
