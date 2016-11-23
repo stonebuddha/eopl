@@ -212,9 +212,7 @@ Module LetImpl.
       eauto 7.
   Qed.
 
-  Ltac invert' H := inversion H; clear H; subst.
-
-  Function value_of_term (env : environment) (tm : term) : behavior :=
+  Definition value_of_term (env : environment) (tm : term) : behavior :=
     match tm with
     | TmExp exp => value_of env exp
     | TmDiff1 beh1 exp2 =>
@@ -247,6 +245,8 @@ Module LetImpl.
       val1 <- beh1;
         value_of (extend_env env x val1) exp2
     end.
+
+  Ltac invert' H := inversion H; clear H; subst.
 
   Theorem value_of_term_completeness :
     forall env tm beh,
