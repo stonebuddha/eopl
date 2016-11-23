@@ -1,248 +1,496 @@
-Require Import Bool ZArith Arith String List Max.
+Require Import Bool ZArith Arith List Max.
+Require Import String.
 Set Implicit Arguments.
 
-Inductive expression : Set :=
-| Const : nat -> expression
-| Diff : expression -> expression -> expression
-| IsZero : expression -> expression
-| If : expression -> expression -> expression -> expression
-| Var : string -> expression
-| Let : string -> expression -> expression -> expression
-| Proc : string -> expression -> expression
-| Call : expression -> expression -> expression
-| Letrec : string -> string -> expression -> expression -> expression.
+Definition var := string.
+Definition var_eq : forall x y : var, {x = y} + {x <> y} := string_dec.
+Infix "==v" := var_eq (no associativity, at level 50).
 
-CoInductive expval : Set :=
-| Num : Z -> expval
-| Bool : bool -> expval
-| Clo : string -> expression -> (string -> option_expval) -> expval
+Module LetrecSpec.
+  Inductive expression : Set :=
+  | ExpConst : nat -> expression
+  | ExpDiff : expression -> expression -> expression
+  | ExpIsZero : expression -> expression
+  | ExpIf : expression -> expression -> expression -> expression
+  | ExpVar : var -> expression
+  | ExpLet : var -> expression -> expression -> expression
+  | ExpProc : var -> expression -> expression
+  | ExpCall : expression -> expression -> expression
+  | ExpLetrec : var -> var -> expression -> expression -> expression.
 
-with option_expval : Set :=
-| Some : expval -> option_expval
-| None : option_expval.
+  Implicit Type exp : expression.
 
-Definition environment := string -> option_expval.
-Definition empty_env : environment := (fun _ => None).
-Definition extend_env (x : string) (v : expval) (env : environment) : environment :=
-  fun y => if string_dec x y then Some v else env y.
-CoFixpoint extend_env_rec (p_name : string) (b_var : string) (p_body : expression) (env : environment) : environment :=
-  fun y => if string_dec p_name y then Some (Clo b_var p_body (extend_env_rec p_name b_var p_body env)) else env y.
+  Inductive expval : Set :=
+  | ValNum : Z -> expval
+  | ValBool : bool -> expval
+  | ValClo : var -> expression -> environment -> expval
 
-Inductive value_of_rel : expression -> environment -> expval -> Prop :=
-| VConst :
-    forall num env,
-      value_of_rel (Const num) env (Num (Z.of_nat num))
-| VDiff :
-    forall exp1 exp2 num1 num2 env,
-      value_of_rel exp1 env (Num num1) ->
-      value_of_rel exp2 env (Num num2) ->
-      value_of_rel (Diff exp1 exp2) env (Num (num1 - num2))
-| VIsZero :
-    forall exp1 num1 env,
-      value_of_rel exp1 env (Num num1) ->
-      value_of_rel (IsZero exp1) env (Bool (Z.eqb num1 0))
-| VIfTrue :
-    forall exp1 exp2 exp3 val2 env,
-      value_of_rel exp1 env (Bool true) ->
-      value_of_rel exp2 env val2 ->
-      value_of_rel (If exp1 exp2 exp3) env val2
-| VIfFalse :
-    forall exp1 exp2 exp3 val3 env,
-      value_of_rel exp1 env (Bool false) ->
-      value_of_rel exp3 env val3 ->
-      value_of_rel (If exp1 exp2 exp3) env val3
-| VVar :
-    forall var env val,
-      env var = Some val ->
-      value_of_rel (Var var) env val
-| VLet :
-    forall var exp1 body env val1 valb,
-      value_of_rel exp1 env val1 ->
-      value_of_rel body (extend_env var val1 env) valb ->
-      value_of_rel (Let var exp1 body) env valb
-| VProc :
-    forall var body env,
-      value_of_rel (Proc var body) env (Clo var body env)
-| VCall :
-    forall rator rand env var body saved_env rand_val valb,
-      value_of_rel rator env (Clo var body saved_env) ->
-      value_of_rel rand env rand_val ->
-      value_of_rel body (extend_env var rand_val saved_env) valb ->
-      value_of_rel (Call rator rand) env valb
-| VLetrec :
-    forall p_name b_var p_body letrec_body env valb,
-      value_of_rel letrec_body (extend_env_rec p_name b_var p_body env) valb ->
-      value_of_rel (Letrec p_name b_var p_body letrec_body) env valb.
+  with environment : Set :=
+       | EnvEmpty : environment
+       | EnvExtend : var -> expval -> environment -> environment
+       | EnvExtendRec : var -> var -> expression -> environment -> environment.
 
-Notation "x <- e1 ; e2" :=
-  (match e1 with
-   | None => None
-   | Some x => e2
-   end)
-    (right associativity, at level 60).
+  Implicit Type val : expval.
+  Implicit Type env : environment.
 
-Function value_of (exp : expression) (env : environment) (fuel : nat) : option_expval :=
-  match fuel with
-  | O => None
-  | S fuel' =>
-    match exp with
-    | Const num => Some (Num (Z.of_nat num))
-    | Diff exp1 exp2 =>
-      val1 <- value_of exp1 env fuel';
-        val2 <- value_of exp2 env fuel';
+  Inductive behavior : Set :=
+  | BehVal : expval -> behavior
+  | BehErr : behavior.
+
+  Implicit Type beh : behavior.
+
+  Coercion BehVal : expval >-> behavior.
+
+  Definition empty_env := EnvEmpty.
+  Definition extend_env (env : environment) (x : var) (v : expval) : environment := EnvExtend x v env.
+  Definition extend_env_rec (env : environment) (p_name : var) (b_var : var) (p_body : expression) : environment := EnvExtendRec p_name b_var p_body env.
+  Fixpoint apply_env (env : environment) (x : var) : behavior :=
+    match env with
+    | EnvEmpty => BehErr
+    | EnvExtend x' v env' => if x' ==v x then v else apply_env env' x
+    | EnvExtendRec p_name b_var p_body env' => if p_name ==v x then ValClo b_var p_body env else apply_env env' x
+    end.
+
+  Inductive term : Set :=
+  | TmExp : expression -> term
+  | TmDiff1 : behavior -> expression -> term
+  | TmDiff2 : expval -> behavior -> term
+  | TmIsZero1 : behavior -> term
+  | TmIf1 : behavior -> expression -> expression -> term
+  | TmLet1 : var -> behavior -> expression -> term
+  | TmCall1 : behavior -> expression -> term
+  | TmCall2 : expval -> behavior -> term.
+
+  Coercion TmExp : expression >-> term.
+
+  Inductive abort : behavior -> Prop :=
+  | AbrErr : abort BehErr.
+
+  Inductive is_num : expval -> Prop :=
+  | IsNum : forall n, is_num (ValNum n).
+
+  Inductive is_bool : expval -> Prop :=
+  | IsBool : forall b, is_bool (ValBool b).
+
+  Inductive is_clo : expval -> Prop :=
+  | IsClo : forall x exp1 saved_env, is_clo (ValClo x exp1 saved_env).
+
+  Inductive value_of_rel : environment -> term -> behavior -> Prop :=
+  | VrelConst :
+      forall env n,
+        value_of_rel env (ExpConst n) (ValNum (Z.of_nat n))
+  | VrelDiff :
+      forall env exp1 beh1 exp2 beh,
+        value_of_rel env exp1 beh1 ->
+        value_of_rel env (TmDiff1 beh1 exp2) beh ->
+        value_of_rel env (ExpDiff exp1 exp2) beh
+  | VrefDiff1_abort :
+      forall beh1 env exp2,
+        abort beh1 ->
+        value_of_rel env (TmDiff1 beh1 exp2) beh1
+  | VrelDiff1 :
+      forall env exp2 beh2 val1 beh,
+        value_of_rel env exp2 beh2 ->
+        value_of_rel env (TmDiff2 val1 beh2) beh ->
+        value_of_rel env (TmDiff1 val1 exp2) beh
+  | VrelDiff2_abort :
+      forall beh2 env val1,
+        abort beh2 ->
+        value_of_rel env (TmDiff2 val1 beh2) beh2
+  | VrelDiff2 :
+      forall env n1 n2,
+        value_of_rel env (TmDiff2 (ValNum n1) (ValNum n2)) (ValNum (n1 - n2))
+  | VrelDiff2_err :
+      forall val1 val2 env,
+        ~(is_num val1 /\ is_num val2) ->
+        value_of_rel env (TmDiff2 val1 val2) BehErr
+  | VrelIsZero :
+      forall env exp1 beh1 beh,
+        value_of_rel env exp1 beh1 ->
+        value_of_rel env (TmIsZero1 beh1) beh ->
+        value_of_rel env (ExpIsZero exp1) beh
+  | VrelIsZero1_abort :
+      forall beh1 env,
+        abort beh1 ->
+        value_of_rel env (TmIsZero1 beh1) beh1
+  | VrelIsZero1 :
+      forall env n1,
+        value_of_rel env (TmIsZero1 (ValNum n1)) (ValBool (Z.eqb n1 0))
+  | VrelIsZero1_err :
+      forall val1 env,
+        ~is_num val1 ->
+        value_of_rel env (TmIsZero1 val1) BehErr
+  | VrelIf :
+      forall env exp1 beh1 exp2 exp3 beh,
+        value_of_rel env exp1 beh1 ->
+        value_of_rel env (TmIf1 beh1 exp2 exp3) beh ->
+        value_of_rel env (ExpIf exp1 exp2 exp3) beh
+  | VrelIf1_abort :
+      forall beh1 env exp2 exp3,
+        abort beh1 ->
+        value_of_rel env (TmIf1 beh1 exp2 exp3) beh1
+  | VrelIf1_true :
+      forall env exp2 beh2 exp3,
+        value_of_rel env exp2 beh2 ->
+        value_of_rel env (TmIf1 (ValBool true) exp2 exp3) beh2
+  | VrelIf1_false :
+      forall env exp3 beh3 exp2,
+        value_of_rel env exp3 beh3 ->
+        value_of_rel env (TmIf1 (ValBool false) exp2 exp3) beh3
+  | VrelIf1_err :
+      forall val1 env exp2 exp3,
+        ~is_bool val1 ->
+        value_of_rel env (TmIf1 val1 exp2 exp3) BehErr
+  | VrelVar :
+      forall env x,
+        value_of_rel env (ExpVar x) (apply_env env x)
+  | VrelLet :
+      forall env exp1 beh1 x exp2 beh,
+        value_of_rel env exp1 beh1 ->
+        value_of_rel env (TmLet1 x beh1 exp2) beh ->
+        value_of_rel env (ExpLet x exp1 exp2) beh
+  | VrelLet1_abort :
+      forall beh1 env x exp2,
+        abort beh1 ->
+        value_of_rel env (TmLet1 x beh1 exp2) beh1
+  | VrelLet1 :
+      forall env x val1 exp2 beh2,
+        value_of_rel (extend_env env x val1) exp2 beh2 ->
+        value_of_rel env (TmLet1 x val1 exp2) beh2
+  | VrelProc :
+      forall env x exp1,
+        value_of_rel env (ExpProc x exp1) (ValClo x exp1 env)
+  | VrelCall :
+      forall env exp1 beh1 exp2 beh,
+        value_of_rel env exp1 beh1 ->
+        value_of_rel env (TmCall1 beh1 exp2) beh ->
+        value_of_rel env (ExpCall exp1 exp2) beh
+  | VrelCall1_abort :
+      forall beh1 env exp2,
+        abort beh1 ->
+        value_of_rel env (TmCall1 beh1 exp2) beh1
+  | VrelCall1 :
+      forall env exp2 beh2 val1 beh,
+        value_of_rel env exp2 beh2 ->
+        value_of_rel env (TmCall2 val1 beh2) beh ->
+        value_of_rel env (TmCall1 val1 exp2) beh
+  | VrelCall2_abort :
+      forall beh2 env val1,
+        abort beh2 ->
+        value_of_rel env (TmCall2 val1 beh2) beh2
+  | VrelCall2 :
+      forall saved_env x val2 exp1 beh env,
+        value_of_rel (extend_env saved_env x val2) exp1 beh ->
+        value_of_rel env (TmCall2 (ValClo x exp1 saved_env) val2) beh
+  | VrelCall2_err :
+      forall val1 env val2,
+        ~is_clo val1 ->
+        value_of_rel env (TmCall2 val1 val2) BehErr
+  | VrelLetrec :
+      forall env p_name b_var p_body exp1 beh,
+        value_of_rel (extend_env_rec env p_name b_var p_body) exp1 beh ->
+        value_of_rel env (ExpLetrec p_name b_var p_body exp1) beh.
+  
+  Hint Constructors expression expval environment behavior term abort is_num is_bool is_clo value_of_rel.
+End LetrecSpec.
+  
+Module LetrecImpl.
+  Export LetrecSpec.
+
+  Implicit Type exp : expression.
+  Implicit Type val : expval.
+  Implicit Type env : environment.
+  Implicit Type beh : behavior.
+
+  Notation "x <- e1 ; e2" :=
+    (match e1 with
+     | BehVal x => e2
+     | BehErr => Some BehErr
+     end)
+      (right associativity, at level 60).
+
+  Notation " x <-- e1 ; e2" :=
+    (match e1 with
+     | Some x => e2
+     | None => None
+     end)
+      (right associativity, at level 60).
+
+  Function value_of (fuel : nat) (env : environment) (exp : expression) : option behavior :=
+    match fuel with
+    | 0 => None
+    | S fuel' =>
+      match exp with
+      | ExpConst n => Some (BehVal (ValNum (Z.of_nat n)))
+      | ExpDiff exp1 exp2 =>
+        beh1 <-- value_of fuel' env exp1;
+          val1 <- beh1;
+          beh2 <-- value_of fuel' env exp2;
+          val2 <- beh2;
+          match (val1, val2) with
+          | (ValNum n1, ValNum n2) => Some (BehVal (ValNum (n1 - n2)))
+          | _ => Some BehErr
+          end
+      | ExpIsZero exp1 =>
+        beh1 <-- value_of fuel' env exp1;
+          val1 <- beh1;
+          match val1 with
+          | ValNum n1 => Some (BehVal (ValBool (Z.eqb n1 0)))
+          | _ => Some BehErr
+          end
+      | ExpIf exp1 exp2 exp3 =>
+        beh1 <-- value_of fuel' env exp1;
+          val1 <- beh1;
+          match val1 with
+          | ValBool true => value_of fuel' env exp2
+          | ValBool false => value_of fuel' env exp3
+          | _ => Some BehErr
+          end
+      | ExpVar x => Some (apply_env env x)
+      | ExpLet x exp1 exp2 =>
+        beh1 <-- value_of fuel' env exp1;
+          val1 <- beh1; 
+          value_of fuel' (extend_env env x val1) exp2
+      | ExpProc x exp1 => Some (BehVal (ValClo x exp1 env))
+      | ExpCall exp1 exp2 =>
+        beh1 <-- value_of fuel' env exp1;
+          val1 <- beh1; 
+          beh2 <-- value_of fuel' env exp2;
+          val2 <- beh2;
+          match val1 with
+          | ValClo x exp saved_env =>
+            value_of fuel' (extend_env saved_env x val2) exp
+          | _ => Some BehErr
+          end
+      | ExpLetrec p_name b_var p_body exp1 =>
+        value_of fuel' (extend_env_rec env p_name b_var p_body) exp1
+      end
+    end.
+
+   Hint Extern 3 => match goal with
+                  | [ H : is_num (ValBool _) |- _ ] => inversion H; clear H
+                  | [ H : is_num (ValClo _ _ _) |- _ ] => inversion H; clear H
+                  | [ H : is_bool (ValNum _) |- _ ] => inversion H; clear H
+                  | [ H : is_bool (ValClo _ _ _) |- _ ] => inversion H; clear H
+                  | [ H : is_clo (ValNum _) |- _ ] => inversion H; clear H
+                  | [ H : is_clo (ValBool _) |- _ ] => inversion H; clear H
+                  | [ |- context[is_num (ValBool _)] ] => intuition
+                  | [ |- context[is_num (ValClo _ _ _)] ] => intuition
+                  | [ |- context[is_bool (ValNum _)] ] => intuition
+                  | [ |- context[is_bool (ValClo _ _ _)] ] => intuition
+                  | [ |- context[is_clo (ValNum _)] ] => intuition
+                  | [ |- context[is_clo (ValBool _)] ] => intuition
+                  | [ H : ~ _ |- _ ] => contradict H
+                  end.
+
+  Ltac invert' H := inversion H; clear H; subst.
+
+  Theorem value_of_soundness :
+    forall env exp beh,
+      (exists fuel, value_of fuel env exp = Some beh) ->
+      value_of_rel env exp beh.
+  Proof.
+    intros.
+    destruct H as [ fuel ? ].
+    generalize dependent env.
+    generalize dependent exp.
+    generalize dependent beh.
+    induction fuel; intros; try discriminate; rewrite value_of_equation in *; destruct exp;
+      repeat match goal with
+             | [ _ : context[match value_of ?FUEL ?ENV ?EXP with Some _ => _ | None => _ end] |- _ ] =>
+               destruct (value_of FUEL ENV EXP) eqn:?; try congruence
+             | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
+               destruct BEH; try congruence
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
+               destruct VAL; try congruence
+             | [ _ : context[if ?B then _ else _] |- _ ] =>
+               destruct B
+             | [ IH : forall _, _, H : value_of _ _ _ = _ |- _ ] =>
+               apply IH in H; try congruence
+             | [ H : Some _ = Some _ |- _ ] =>
+               invert' H
+             end;
+      eauto.
+  Qed.
+
+  Definition value_of_term (fuel : nat) (env : environment) (tm : term) : option behavior :=
+    match tm with
+    | TmExp exp => value_of fuel env exp
+    | TmDiff1 beh1 exp2 =>
+      val1 <- beh1;
+        beh2 <-- value_of fuel env exp2;
+        val2 <- beh2;
         match (val1, val2) with
-        | (Num num1, Num num2) => Some (Num (num1 - num2))
-        | _ => None
+        | (ValNum n1, ValNum n2) => Some (BehVal (ValNum (n1 - n2)))
+        | _ => Some BehErr
         end
-    | IsZero exp1 =>
-      val1 <- value_of exp1 env fuel';
+    | TmDiff2 val1 beh2 =>
+      val2 <- beh2;
+        match (val1, val2) with
+        | (ValNum n1, ValNum n2) => Some (BehVal (ValNum (n1 - n2)))
+        | _ => Some BehErr
+        end
+    | TmIsZero1 beh1 =>
+      val1 <- beh1;
         match val1 with
-        | Num num1 => Some (Bool (Z.eqb num1 0))
-        | _ => None
+        | ValNum n1 => Some (BehVal (ValBool (Z.eqb n1 0)))
+        | _ => Some BehErr
         end
-    | If exp1 exp2 exp3 =>
-      val1 <- value_of exp1 env fuel';
+    | TmIf1 beh1 exp2 exp3 =>
+      val1 <- beh1;
         match val1 with
-        | Bool true => value_of exp2 env fuel'
-        | Bool false => value_of exp3 env fuel'
-        | _ => None
+        | ValBool true => value_of fuel env exp2
+        | ValBool false => value_of fuel env exp3
+        | _ => Some BehErr
         end
-    | Var var => env var
-    | Let var exp1 body =>
-      val1 <- value_of exp1 env fuel';
-        value_of body (extend_env var val1 env) fuel'
-    | Proc var body => Some (Clo var body env)
-    | Call rator rand =>
-      rator_val <- value_of rator env fuel';
-        match rator_val with
-        | Clo var body saved_env =>
-          rand_val <- value_of rand env fuel';
-            value_of body (extend_env var rand_val saved_env) fuel'
-        | _ => None
+    | TmLet1 x beh1 exp2 =>
+      val1 <- beh1;
+        value_of fuel (extend_env env x val1) exp2
+    | TmCall1 beh1 exp2 =>
+      val1 <- beh1;
+        beh2 <-- value_of fuel env exp2;
+        val2 <- beh2;
+        match val1 with
+        | ValClo x exp saved_env =>
+          value_of fuel (extend_env saved_env x val2) exp
+        | _ => Some BehErr
         end
-    | Letrec p_name b_var p_body letrec_body =>
-      value_of letrec_body (extend_env_rec p_name b_var p_body env) fuel'
-    end
-  end.
+    | TmCall2 val1 beh2 =>
+      val2 <- beh2;
+        match val1 with
+        | ValClo x exp saved_env =>
+          value_of fuel (extend_env saved_env x val2) exp
+        | _ => Some BehErr
+        end
+    end.
 
-Hint Constructors value_of_rel.
+  Lemma fuel_incr :
+    forall fuel env exp beh,
+      value_of fuel env exp = Some beh ->
+      value_of (S fuel) env exp = Some beh.
+  Proof.
+    induction fuel; intros; rewrite value_of_equation in *; subst; try congruence; destruct exp;
+      repeat match goal with
+             | [ _ : context[match value_of ?FUEL ?ENV ?EXP with Some _ => _ | None => _ end] |- _ ] =>
+               destruct (value_of FUEL ENV EXP) eqn:?; try congruence
+             | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
+               destruct BEH
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
+               destruct VAL; try congruence
+             | [ _ : context[if ?B then _ else _] |- _ ] =>
+               destruct B
+             | [ IH : forall _, _, H : value_of _ _ _ = _ |- _ ] =>
+               apply IH in H; try congruence; rewrite H
+             end;
+      eauto.
+  Qed.
 
-Theorem value_of_soundness :
-  forall exp env val,
-    (exists fuel, value_of exp env fuel = Some val) ->
-    value_of_rel exp env val.
-Proof.
-  intros.
-  destruct 0 as [ fuel ? ].
-  generalize dependent val.
-  generalize dependent env.
-  generalize dependent exp.
-  induction fuel; intros; try discriminate; destruct exp;
-    match goal with
-    | [ H : value_of _ _ _ = _ |- _ ] => simpl in H
-    end;
-    repeat (
-        try match goal with
-            | [ _ : context[match value_of ?EXP ?ENV ?FUEL with Some _ => _ | None => _ end] |- _ ] =>
-              destruct (value_of EXP ENV FUEL) eqn:?; try discriminate
-            | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ _ => _ end] |- _ ] =>
-              destruct VAL; try discriminate
-            | [ _ : context[if ?B then _ else _] |- _ ] =>
-              destruct B
-            | [ H : Some _ = Some _ |- _ ] =>
-              inversion H; subst; clear H
-            end;
-        eauto).
-Qed.
-
-Lemma fuel_incr :
-  forall fuel exp env val,
-    value_of exp env fuel = Some val ->
-    value_of exp env (S fuel) = Some val.
-Proof.
-  induction fuel; intros; try discriminate; destruct exp;
-    match goal with
-    | [ H : value_of _ _ _ = _ |- _ ] => simpl in H
-    end;
-    rewrite value_of_equation;
-    repeat (
-        try match goal with
-            | [ _ : context[match value_of ?EXP ?ENV ?FUEL with Some _ => _ | None => _ end] |- _ ] =>
-              destruct (value_of EXP ENV FUEL) eqn:?; try discriminate
-            | [ _ : context[match ?VAL with Num _ => _ | Bool _ => _ | Clo _ _ _ => _ end] |- _ ] =>
-              destruct VAL; try discriminate
-            | [ _ : context[if ?B then _ else _] |- _ ] =>
-              destruct B
-            | [ IH : forall _, _, H : value_of ?EXP ?ENV ?FUEL = Some ?VAL |- context[match value_of ?EXP ?ENV (S ?FUEL) with Some _ => _ | None => _ end] ] =>
-              apply IH in H; try (rewrite -> H; clear H)
-            end;
-        eauto).
-Qed.
-
-Lemma fuel_order :
-  forall exp env val fuel fuel',
-    value_of exp env fuel = Some val ->
-    fuel <= fuel' ->
-    value_of exp env fuel' = Some val.
-Proof.
   Hint Resolve fuel_incr.
-  induction 2; auto.
-Qed.
 
-Lemma le_max_1 : forall a b c, a <= max (max a b) c.
-  intros.
-  rewrite <- max_assoc.
-  apply le_max_l.
-Qed.
+  Lemma fuel_order :
+    forall fuel env exp beh fuel',
+      value_of fuel env exp = Some beh ->
+      fuel <= fuel' ->
+      value_of fuel' env exp = Some beh.
+  Proof.
+    induction 2; auto.
+  Qed.
 
-Lemma le_max_2 : forall a b c, b <= max (max a b) c.
-  intros.
-  rewrite (max_comm a b).
-  rewrite <- max_assoc.
-  apply le_max_l.
-Qed.
+  Hint Resolve fuel_order.
 
-Lemma le_max_3 : forall a b c, c <= max (max a b) c.
-  intros.
-  apply le_max_r.
-Qed.
+  Lemma fuel_order_tm :
+    forall fuel env tm beh fuel',
+      value_of_term fuel env tm = Some beh ->
+      fuel <= fuel' ->
+      value_of_term fuel' env tm = Some beh.
+  Proof.
+    intros; destruct tm; simpl in *; eauto;
+    repeat match goal with
+           | [ _ : context[match value_of ?FUEL ?ENV ?EXP with Some _ => _ | None => _ end] |- _ ] =>
+             destruct (value_of FUEL ENV EXP) eqn:T; try congruence; apply fuel_order with (fuel' := fuel') in T; eauto; rewrite T
+           | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
+             destruct BEH; try congruence
+           | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
+             destruct VAL; try congruence
+           | [ _ : context[if ?B then _ else _] |- _ ] =>
+             destruct B
+           end;
+      eauto.
+  Qed.
 
-Theorem value_of_completeness :
-  forall exp env val,
-    value_of_rel exp env val ->
-    exists fuel, value_of exp env fuel = Some val.
-Proof.
+  Lemma le_max_1 : forall a b c, a <= max (max a b) c.
+    intros.
+    rewrite <- max_assoc.
+    apply le_max_l.
+  Qed.
+
+  Lemma le_max_2 : forall a b c, b <= max (max a b) c.
+    intros.
+    rewrite (max_comm a b).
+    rewrite <- max_assoc.
+    apply le_max_l.
+  Qed.
+
+  Lemma le_max_3 : forall a b c, c <= max (max a b) c.
+    intros.
+    apply le_max_r.
+  Qed.
+
   Hint Resolve le_max_l le_max_r le_max_1 le_max_2 le_max_3.
-  induction 1;
-    match goal with
-    | [ IH1 : exists _, _, IH2 : exists _, _, IH3 : exists _, _ |- _ ] =>
-      destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ]; destruct IH3 as [ fuel3 ? ];
-        exists (S (max (max fuel1 fuel2) fuel3))
-    | [ IH1 : exists _, _, IH2 : exists _, _ |- _ ] =>
-      destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ];
-        exists (S (max fuel1 fuel2))
-    | [ IH1 : exists _, _ |- _ ] =>
-      destruct IH1 as [ fuel1 ? ];
-        exists (S fuel1)
-    | [ |- _ ] =>
-      exists (S O)
-    end;
-    eauto;
-    rewrite value_of_equation;
-    repeat (
-        try match goal with
-            | [ H : value_of ?EXP ?ENV ?FUEL1 = _ |- context[value_of ?EXP ?ENV ?FUEL2] ] =>
-              apply fuel_order with (fuel' := FUEL2) in H; auto;
-              try (rewrite -> H; clear H)
-            end;
-        eauto).
-Qed.
 
-Theorem value_of_correctness :
-  forall exp env val,
-    (exists fuel, value_of exp env fuel = Some val) <->
-    value_of_rel exp env val.
-Proof.
+  Theorem value_of_term_completeness :
+    forall env tm beh,
+      value_of_rel env tm beh ->
+      exists fuel, value_of_term fuel env tm = Some beh.
+  Proof.
+    induction 1; auto;
+      match goal with
+      | [ IH1 : exists _, _, IH2 : exists _, _ |- _ ] =>
+        destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ]; exists (S (max fuel1 fuel2))
+      | [ IH1 : exists _, _ |- _ ] =>
+        destruct IH1 as [ fuel1 ? ]; exists (S fuel1)
+      | [ |- _ ] =>
+        exists 1
+      end;
+      unfold value_of_term in *;
+      try match goal with
+      | [ |- value_of _ _ _ = _ ] => rewrite value_of_equation
+      end;
+      repeat match goal with
+             | [ H : value_of ?FUEL1 ?ENV ?EXP = _ |- match value_of ?FUEL2 ?ENV ?EXP with Some _ => _ | None => _ end = _ ] =>
+               apply fuel_order with (fuel' := FUEL2) in H; eauto; rewrite H
+             | [ H : match value_of ?FUEL1 ?ENV ?EXP with Some _ => _ | None => _ end = _ |- match value_of ?FUEL2 ?ENV ?EXP with Some _ => _ | None => _ end = _ ] =>
+               destruct (value_of FUEL1 ENV EXP) eqn:T; try congruence; apply fuel_order with (fuel' := FUEL2) in T; eauto; rewrite T; clear T
+             | [ |- context[match ?BEH with BehVal _ => _ | BehErr => _ end] ] =>
+               destruct BEH; try congruence
+             | [ |- context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] ] =>
+               destruct VAL; try congruence
+             | [ |- context[if ?B then _ else _] ] =>
+               destruct B
+             | [ H : abort _ |- _ ] =>
+               invert' H
+             end;
+      eauto.
+  Qed.
+
+  Theorem value_of_completeness :
+    forall env exp beh,
+      value_of_rel env exp beh ->
+      exists fuel, value_of fuel env exp = Some beh.
+  Proof.
+    intros.
+    apply value_of_term_completeness in H; auto.
+  Qed.
+
   Hint Resolve value_of_soundness value_of_completeness.
-  intros; split; auto.
-Qed.
+
+  Theorem value_of_correctness :
+    forall env exp beh,
+      (exists fuel, value_of fuel env exp = Some beh) <->
+      value_of_rel env exp beh.
+  Proof.
+    intuition.
+  Qed.
+End LetrecImpl.
+
+Export LetrecImpl.
