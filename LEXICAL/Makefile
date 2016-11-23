@@ -1,5 +1,7 @@
 OBJS = support.cmo syntax.cmo translator.cmo core.cmo main.cmo
 
+.PHONY: proof clean
+
 LEXICAL.exe: $(OBJS)
 	@echo Linking $@
 	ocamlc -o $@ -I `camlp5 -where` gramlib.cma $(OBJS)
@@ -20,8 +22,10 @@ main.cmo: syntax.cmi translator.cmi core.cmi
 %.cmo: %.ml
 	ocamlc -c -I `camlp5 -where` -pp 'camlp5o pa_extend.cmo' $<
 
-proof: proof.v
+proof: proof.vo
+
+proof.vo: proof.v
 	coqc $<
 
-clean::
+clean:
 	rm -rf *.exe *.cmi *.cmo *.vo *.glob
