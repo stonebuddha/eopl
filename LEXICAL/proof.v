@@ -1,9 +1,8 @@
 Require Import String.
 Require Import Bool ZArith Arith List Max.
 Require Import Logic.Eqdep_dec Program.Equality.
+Require Import Classical.
 Set Implicit Arguments.
-
-Axiom prop_ext : forall P Q : Prop, (P <-> Q) -> P = Q.
 
 Definition var := string.
 Definition var_eq : forall x y : var, {x = y} + {x <> y} := string_dec.
@@ -184,7 +183,7 @@ Module ProcSpec.
         abort beh2 ->
         value_of_rel env (TmCall2 fv val1 beh2) beh2
   | VrelCall2 :
-      forall fv saved_env x val2 (exp1 : expression (x :: fv)) beh env,
+      forall saved_fv (saved_env : environment saved_fv) x val2 (exp1 : expression (x :: saved_fv)) beh fv (env : environment fv),
         value_of_rel (extend_env saved_env x val2) exp1 beh ->
         value_of_rel env (TmCall2 fv (ValClo exp1 saved_env) val2) beh
   | VrelCall2_err :
@@ -366,7 +365,7 @@ Module LexicalSpec.
         abort beh2 ->
         value_of_rel env (TmCall2 ctx val1 beh2) beh2
   | VrelCall2 :
-      forall ctx saved_env val2 (exp1 : expression (S ctx)) beh env,
+      forall saved_ctx (saved_env : environment saved_ctx) val2 (exp1 : expression (S saved_ctx)) beh ctx (env : environment ctx),
         value_of_rel (extend_env saved_env val2) exp1 beh ->
         value_of_rel env (TmCall2 ctx (ValClo exp1 saved_env) val2) beh
   | VrelCall2_err :
@@ -391,7 +390,7 @@ Module TranslationImpl.
             | left _ => fun _ => exist _ 0 _
             | right ne => fun pf =>
                            match F (P.x_in_extend ne pf) with
-                           | exist _ n _ => exist _ n _
+                           | exist _ n _ => exist _ (S n) _
                            end
             end
           end);
@@ -489,47 +488,427 @@ Module TranslationImpl.
   Ltac invert' H := inversion H; clear H; subst.
   Ltac existT_invert' H := apply inj_pair2_eq_dec in H; eauto; subst.
 
+  Lemma apply_env_correctness :
+    forall fv x pf n pflt (env : P.environment fv),
+      index fv x pf = exist _ n pflt ->
+      L.apply_env (translation_of_environment env) pflt = translation_of_expval (P.apply_env env x pf).
+  Proof.
+    dependent induction fv; intros; intuition.
+
+    simpl in *.
+    destruct (a ==v x).
+
+    invert' H.
+    dependent destruction env.
+    simpl.
+    destruct (x ==v x); try congruence.
+
+    destruct (index fv x (P.x_in_extend n0 pf)) eqn:?.
+    invert' H.
+    dependent destruction env.
+    simpl.
+    destruct (a ==v x); try congruence.
+    apply IHfv with (env := env) in Heqs.
+    assert (n = n0). apply proof_irrelevance.
+    rewrite H.
+    assert (lt_S_n x0 (length fv) pflt = l). apply proof_irrelevance.
+    rewrite H0.
+    assumption.
+  Qed.
+
   Theorem translation_of_term_soundness :
-    forall fv (env : P.environment fv) env' tm tm' beh beh',
+    forall fv (env : P.environment fv) env' tm tm' beh',
       translation_of_environment env = env' ->
       translation_of_term tm = tm' ->
-      translation_of_behavior beh = beh' ->
       L.value_of_rel env' tm' beh' ->
-      P.value_of_rel env tm beh.
+      exists beh,
+        translation_of_behavior beh = beh' /\
+        P.value_of_rel env tm beh.
   Proof.
     intros.
     generalize dependent env.
     generalize dependent tm.
-    generalize dependent beh.
-    dependent induction H2; intros.
+    dependent induction H1; intros.
 
-    unfold translation_of_behavior in *.
-    destruct beh; try congruence.
-    unfold translation_of_term in *.
-    dependent destruction tm; try discriminate.
-    invert' H1.
+    destruct tm; try discriminate.
+    simpl in H0.
     invert' H0.
-    existT_invert' H1.
-    rewrite translation_of_expval_equation in *.
-    destruct e; try congruence.
-    invert' H3.
-    rewrite translation_of_equation in *.
-    destruct e0; try discriminate.
-    invert' H1.
+    existT_invert' H2.
+    destruct e; try discriminate.
+    simpl in H2.
+    invert' H2.
+    exists (P.BehVal (P.ValNum (Z.of_nat n))).
     eauto.
+    simpl in H2.
     destruct (index fv x i); discriminate.
-  Admitted.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H2.
+    destruct e; try discriminate.
+    simpl in H2.
+    invert' H2.
+    existT_invert' H0.
+    existT_invert' H1.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env0 := env); eauto.
+    destruct H.
+    subst.
+    destruct IHvalue_of_rel2 with (tm' := L.TmDiff1 (translation_of_behavior x) (translation_of e2)) (tm := P.TmDiff1 x e2) (env0 := env); eauto.
+    destruct H.
+    eauto.
+    simpl in H2.
+    destruct (index fv x i); discriminate.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H4.
+    invert' H.
+    destruct b; try discriminate.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H3.
+    destruct b; try discriminate.
+    invert' H2.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env0 := env); eauto.
+    destruct H.
+    subst.
+    destruct IHvalue_of_rel2 with (tm' := L.TmDiff2 (length fv) (translation_of_expval e0) (translation_of_behavior x)) (tm := P.TmDiff2 fv e0 x) (env0 := env); eauto.
+    destruct H.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    invert' H.
+    destruct b; try discriminate.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    destruct b; try discriminate.
+    simpl in H3.
+    invert' H3.
+    destruct e; try discriminate.
+    simpl in H2.
+    invert' H2.
+    destruct e0; try discriminate.
+    simpl in H0.
+    invert' H0.
+    exists (P.BehVal (P.ValNum (n1 - n2))).
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    destruct b; try discriminate.
+    simpl in H4.
+    invert' H4.
+    destruct e, e0; simpl in *;
+      match goal with
+      | [ H : ~(L.is_num (L.ValNum _) /\ (L.is_num (L.ValNum _))) |- _ ] =>
+        contradict H; eauto
+      | _ =>
+        exists P.BehErr; intuition; constructor; intuition;
+          try match goal with
+              | [ H : P.is_num (P.ValBool _) |- _ ] => invert' H
+              | [ H : P.is_num (P.ValClo _ _) |- _ ] => invert' H
+              end
+      end.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H2.
+    destruct e; try discriminate.
+    simpl in H2.
+    invert' H2.
+    existT_invert' H0.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env0 := env); eauto.
+    destruct H.
+    subst.
+    destruct IHvalue_of_rel2 with (tm' := L.TmIsZero1 (length fv) (translation_of_behavior x)) (tm := P.TmIsZero1 fv x) (env0 := env); eauto.
+    destruct H.
+    eauto.
+    simpl in H2.
+    destruct (index fv x i); discriminate.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    invert' H.
+    destruct b; try discriminate.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    destruct b; try discriminate.
+    simpl in H2.
+    invert' H2.
+    destruct e; try discriminate.
+    simpl in H0.
+    invert' H0.
+    exists (P.BehVal (P.ValBool (Z.eqb n1 0))).
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    destruct b; try discriminate.
+    simpl in H3.
+    invert' H3.
+    destruct e.
+    contradict H; simpl; eauto.
+    exists P.BehErr; intuition; constructor; intuition. invert' H0.
+    exists P.BehErr; intuition; constructor; intuition. invert' H0.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H2.
+    destruct e; try discriminate.
+    simpl in H2.
+    invert' H2.
+    existT_invert' H0.
+    existT_invert' H1.
+    existT_invert' H3.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env0 := env); eauto.
+    destruct H.
+    subst.
+    destruct IHvalue_of_rel2 with (tm' := L.TmIf1 (translation_of_behavior x) (translation_of e2) (translation_of e3)) (tm := P.TmIf1 x e2 e3) (env0 := env); eauto.
+    destruct H.
+    eauto.
+    simpl in H2.
+    destruct (index fv x i); discriminate.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H4.
+    existT_invert' H5.
+    invert' H.
+    destruct b; try discriminate.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H4.
+    existT_invert' H5.
+    destruct b; try discriminate.
+    simpl in H3.
+    invert' H3.
+    destruct e1; try discriminate.
+    simpl in H0.
+    invert' H0.
+    destruct IHvalue_of_rel with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env0 := env); eauto.
+    destruct H.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H4.
+    existT_invert' H5.
+    destruct b; try discriminate.
+    simpl in H3.
+    invert' H3.
+    destruct e1; try discriminate.
+    simpl in H0.
+    invert' H0.
+    destruct IHvalue_of_rel with (tm' := L.TmExp (translation_of e0)) (tm := P.TmExp e0) (env0 := env); eauto.
+    destruct H.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H4.
+    existT_invert' H5.
+    destruct b; try discriminate.
+    simpl in H3.
+    invert' H3.
+    destruct e1.
+    exists P.BehErr; intuition; constructor; intuition. invert' H0.
+    contradict H; simpl; eauto.
+    exists P.BehErr; intuition; constructor; intuition. invert' H0.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H2.
+    destruct e; try discriminate.
+    simpl in H2.
+    destruct (index fv x i) eqn:?.
+    invert' H2.
+    exists (P.BehVal (P.apply_env env x i)); intuition.
+    simpl.
+    apply apply_env_correctness with (env := env) in Heqs.
+    assert (l = pf). apply proof_irrelevance.
+    subst.
+    rewrite Heqs.
+    reflexivity.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H2.
+    destruct e; try discriminate.
+    simpl in H2.
+    destruct (index fv x i); discriminate.
+    simpl in H2.
+    invert' H2.
+    existT_invert' H0.
+    existT_invert' H1.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env0 := env); eauto.
+    destruct H.
+    subst.
+    destruct IHvalue_of_rel2 with (tm' := L.TmLet1 (translation_of_behavior x0) (translation_of e2)) (tm := P.TmLet1 x0 e2) (env0 := env); eauto.
+    destruct H.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H4.
+    invert' H.
+    destruct b; try discriminate.
+    invert' H1.
+    exists P.BehErr.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H4.
+    destruct b; try discriminate.
+    simpl in H3.
+    invert' H3.
+    destruct IHvalue_of_rel with (fv0 := x :: fv) (env' := L.extend_env (translation_of_environment env) (translation_of_expval e0)) (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env := P.extend_env env x e0); eauto.
+    destruct H.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H2.
+    destruct e; try discriminate.
+    simpl in H2.
+    destruct (index fv x i); discriminate.
+    simpl in H2.
+    invert' H2.
+    existT_invert' H0.
+    exists (P.BehVal (P.ValClo e env)).
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H2.
+    destruct e; try discriminate.
+    simpl in H2.
+    destruct (index fv x i); discriminate.
+    simpl in H2.
+    invert' H2.
+    existT_invert' H0.
+    existT_invert' H1.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env0 := env); eauto.
+    destruct H.
+    subst.
+    destruct IHvalue_of_rel2 with (tm' := L.TmCall1 (translation_of_behavior x) (translation_of e2)) (tm := P.TmCall1 x e2) (env0 := env); eauto.
+    destruct H.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H4.
+    invert' H.
+    destruct b; try discriminate.
+    invert' H1.
+    exists P.BehErr.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    existT_invert' H3.
+    destruct b; try discriminate.
+    simpl in H2.
+    invert' H2.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env0 := env); eauto.
+    destruct H.
+    subst.
+    destruct IHvalue_of_rel2 with (tm' := L.TmCall2 (length fv) (translation_of_expval e0) (translation_of_behavior x)) (tm := P.TmCall2 fv e0 x) (env0 := env); eauto.
+    destruct H.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    invert' H.
+    destruct b; try discriminate.
+    invert' H1.
+    exists P.BehErr.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    destruct b; try discriminate.
+    simpl in H4.
+    invert' H4.
+    destruct e eqn:?; try discriminate.
+    simpl in H3.
+    invert' H3.
+    existT_invert' H2.
+    existT_invert' H4.
+    destruct IHvalue_of_rel with (fv := x :: fv0) (env' := L.extend_env (translation_of_environment e2) (translation_of_expval e0)) (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env := P.extend_env e2 x e0); eauto.
+    destruct H.
+    eauto.
+
+    destruct tm; try discriminate.
+    simpl in H0.
+    invert' H0.
+    destruct e.
+    exists P.BehErr; intuition; constructor; intuition. invert' H0.
+    exists P.BehErr; intuition; constructor; intuition. invert' H0.
+    contradict H; simpl; eauto.
+  Qed.
 
   Theorem translation_of_soundness :
-    forall (exp : P.expression nil) exp' beh beh',
+    forall (exp : P.expression nil) exp' beh',
       translation_of exp = exp' ->
-      translation_of_behavior beh = beh' ->
       L.value_of_rel L.EnvEmpty (L.TmExp exp') beh' ->
-      P.value_of_rel P.EnvEmpty (P.TmExp exp) beh.
+      exists beh,
+        translation_of_behavior beh = beh' /\
+        P.value_of_rel P.EnvEmpty (P.TmExp exp) beh.
   Proof.
     intros; simpl; subst; eapply translation_of_term_soundness; eauto.
   Qed.
 
+  Hint Extern 3 => match goal with
+                  | [ H : L.is_num (L.ValBool _) |- _ ] => inversion H; clear H
+                  | [ H : L.is_num (L.ValClo _ _) |- _ ] => inversion H; clear H
+                  | [ H : L.is_bool (L.ValNum _) |- _ ] => inversion H; clear H
+                  | [ H : L.is_bool (L.ValClo _ _) |- _ ] => inversion H; clear H
+                  | [ H : L.is_clo (L.ValNum _) |- _ ] => inversion H; clear H
+                  | [ H : L.is_clo (L.ValBool _) |- _ ] => inversion H; clear H
+                  | [ |- context[L.is_num (L.ValBool _)] ] => intuition
+                  | [ |- context[L.is_num (L.ValClo _ _)] ] => intuition
+                  | [ |- context[L.is_bool (L.ValNum _)] ] => intuition
+                  | [ |- context[L.is_bool (L.ValClo _ _)] ] => intuition
+                  | [ |- context[L.is_clo (L.ValNum _)] ] => intuition
+                  | [ |- context[L.is_clo (L.ValBool _)] ] => intuition
+                  | [ H : ~ _ |- _ ] => contradict H
+                  end.
+  
   Theorem translation_of_term_completeness :
     forall fv (env : P.environment fv) env' tm tm' beh beh',
       translation_of_environment env = env' ->
@@ -538,7 +917,22 @@ Module TranslationImpl.
       P.value_of_rel env tm beh ->
       L.value_of_rel env' tm' beh'.
   Proof.
-  Admitted.
+    intros.
+    generalize dependent env'.
+    generalize dependent tm'.
+    generalize dependent beh'.
+    dependent induction H2; intros; simpl in *; subst;
+      try match goal with
+          | [ H : P.abort _ |- _ ] => invert' H
+          end;
+      eauto.
+
+    destruct val1, val2; simpl; intuition eauto.
+    destruct val1; simpl; intuition eauto.
+    destruct val1; simpl; intuition eauto.
+    destruct (index fv x pf) eqn:?; apply apply_env_correctness with (env := env) in Heqs; rewrite <- Heqs; eauto.
+    destruct val1; simpl; intuition eauto.
+  Qed.
     
   Theorem translation_of_completeness :
     forall (exp : P.expression nil) exp' beh beh',
@@ -556,13 +950,13 @@ Module TranslationImpl.
   Hint Resolve translation_of_soundness translation_of_completeness.
 
   Theorem translation_of_correctness :
-    forall (exp : P.expression nil) exp' beh beh',
+    forall (exp : P.expression nil) exp' beh',
       translation_of exp = exp' ->
-      translation_of_behavior beh = beh' ->
       L.value_of_rel L.EnvEmpty (L.TmExp exp') beh' <->
-      P.value_of_rel P.EnvEmpty (P.TmExp exp) beh.
+      (exists beh, translation_of_behavior beh = beh' /\ P.value_of_rel P.EnvEmpty (P.TmExp exp) beh).
   Proof.
     intuition eauto.
+    destruct H0; intuition eauto.
   Qed.
 End TranslationImpl.
 
