@@ -1,10 +1,6 @@
 open Syntax
 
-type refer = int
-
-and store = expval list
-
-and environment = expval list
+type environment = expval list
 
 and expval =
   | NumVal of int
