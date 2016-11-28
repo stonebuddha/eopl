@@ -256,6 +256,10 @@ Module ExplicitRefsSpec.
   | VrelDeref1 :
       forall env l st,
         value_of_rel env (TmDeref1 (ValRef l)) (deref_store st l) st st
+  | VrelDeref1_err :
+      forall val1 env st,
+        ~is_ref val1 ->
+        value_of_rel env (TmDeref1 val1) BehErr st st
   | VrelSetref :
       forall env exp1 beh1 st0 st1 exp2 beh st2,
         value_of_rel env exp1 beh1 st0 st1 ->
@@ -316,7 +320,7 @@ Module ExplicitRefsImpl.
           let (beh1, st1) := res1 in
           match beh1 with
           | BehVal val1 =>
-            res2 <-- value_of fuel' env exp2 st;
+            res2 <-- value_of fuel' env exp2 st1;
               let (beh2, st2) := res2 in
               match beh2 with
               | BehVal val2 =>
@@ -425,12 +429,67 @@ Module ExplicitRefsImpl.
 
   Ltac invert' H := inversion H; clear H; subst.
 
+  Hint Extern 3 => match goal with
+                  | [ H : is_num (ValBool _) |- _ ] => inversion H; clear H
+                  | [ H : is_num (ValClo _ _ _) |- _ ] => inversion H; clear H
+                  | [ H : is_num (ValRef _) |- _ ] => inversion H; clear H
+                  | [ H : is_bool (ValNum _) |- _ ] => inversion H; clear H
+                  | [ H : is_bool (ValClo _ _ _) |- _ ] => inversion H; clear H
+                  | [ H : is_bool (ValRef _) |- _ ] => inversion H; clear H
+                  | [ H : is_clo (ValNum _) |- _ ] => inversion H; clear H
+                  | [ H : is_clo (ValBool _) |- _ ] => inversion H; clear H
+                  | [ H : is_clo (ValRef _) |- _ ] => inversion H; clear H
+                  | [ H : is_ref (ValNum _)  |- _ ] => inversion H; clear H
+                  | [ H : is_ref (ValBool _) |- _ ] => inversion H; clear H
+                  | [ H : is_ref (ValClo _ _ _) |- _ ] => inversion H; clear H
+                  | [ |- context[is_num (ValBool _)] ] => intuition
+                  | [ |- context[is_num (ValClo _ _ _)] ] => intuition
+                  | [ |- context[is_num (ValRef _)] ] => intuition
+                  | [ |- context[is_bool (ValNum _)] ] => intuition
+                  | [ |- context[is_bool (ValClo _ _ _)] ] => intuition
+                  | [ |- context[is_bool (ValRef _)] ] => intuition
+                  | [ |- context[is_clo (ValNum _)] ] => intuition
+                  | [ |- context[is_clo (ValBool _)] ] => intuition
+                  | [ |- context[is_clo (ValRef _)] ] => intuition
+                  | [ |- context[is_ref (ValNum _)] ] => intuition
+                  | [ |- context[is_ref (ValBool _)] ] => intuition
+                  | [ |- context[is_ref (ValClo _ _ _)] ] => intuition
+                  | [ H : ~ _ |- _ ] => contradict H
+                  end.
+
   Theorem value_of_soundness :
     forall env exp st0 beh st1,
       (exists fuel, value_of fuel env exp st0 = Some (beh, st1)) ->
       value_of_rel env exp beh st0 st1.
   Proof.
-  Admitted.
+    intros.
+    destruct H as [ fuel ? ].
+    generalize dependent env.
+    generalize dependent exp.
+    generalize dependent st0.
+    generalize dependent beh.
+    generalize dependent st1.
+    induction fuel; intros; try discriminate; rewrite value_of_equation in *; destruct exp, beh;
+      repeat match goal with
+             | [ _ : context[match value_of ?FUEL ?ENV ?EXP ?ST with Some _ => _ | None => _ end] |- _ ] =>
+               destruct (value_of FUEL ENV EXP ST) eqn:?; try congruence
+             | [ _ : context[match setref_store ?ST ?L ?VAL with Some _ => _ | None => _ end] |- _ ] =>
+               destruct (setref_store ST L VAL) eqn:?; try congruence
+             | [ _ : context[let (_, _) := ?RES in _] |- _ ] =>
+               destruct RES eqn:?
+             | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
+               destruct BEH; try congruence
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ | ValRef _ => _ end] |- _ ] =>
+               destruct VAL; try congruence
+             | [ _ : context[if ?B then _ else _] |- _ ] =>
+               destruct B
+             | [ IH : forall _, _, H : value_of _ _ _ _ = _ |- _ ] =>
+               apply IH in H; try congruence
+             | [ H : Some _ = Some _ |- _ ] =>
+               invert' H
+             end;
+      eauto.
+  Qed.
 
   Definition value_of_term (fuel : nat) (env : environment) (tm : term) (st : store) : option (behavior * store) :=
     match tm with
@@ -560,6 +619,65 @@ Module ExplicitRefsImpl.
       end
     end.
 
+  Lemma fuel_incr :
+    forall fuel env exp st0 beh st1,
+      value_of fuel env exp st0 = Some (beh, st1) ->
+      value_of (S fuel) env exp st0 = Some (beh, st1).
+  Proof.
+    induction fuel; intros; try discriminate; rewrite value_of_equation in *; destruct exp, beh;
+      repeat match goal with
+             | [ _ : context[match value_of ?FUEL ?ENV ?EXP ?ST with Some _ => _ | None => _ end] |- _ ] =>
+               destruct (value_of FUEL ENV EXP ST) eqn:?; try congruence
+             | [ _ : context[let (_, _) := ?RES in _] |- _ ] =>
+               destruct RES eqn:?
+             | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
+               destruct BEH; try congruence
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ | ValRef _ => _ end] |- _ ] =>
+               destruct VAL; try congruence
+             | [ _ : context[if ?B then _ else _] |- _ ] =>
+               destruct B
+             | [ IH : forall _, _, H : value_of _ _ _ _ = _ |- _ ] =>
+               apply IH in H; try congruence; rewrite H
+             end;
+      eauto.
+    destruct (newref_store s e0); congruence.
+  Qed.
+
+  Hint Resolve fuel_incr.
+
+  Lemma fuel_order :
+    forall fuel env exp st0 beh st1 fuel',
+      value_of fuel env exp st0 = Some (beh, st1) ->
+      fuel <= fuel' ->
+      value_of fuel' env exp st0 = Some (beh, st1).
+  Proof.
+    induction 2; auto.
+  Qed.
+
+  Lemma fuel_order_tm :
+    forall fuel env tm st0 beh st1 fuel',
+      value_of_term fuel env tm st0 = Some (beh, st1) ->
+      fuel <= fuel' ->
+      value_of_term fuel' env tm st0 = Some (beh, st1).
+  Proof.
+    intros; destruct tm, beh; simpl in *;
+      repeat match goal with
+             | [ _ : context[match value_of ?FUEL ?ENV ?EXP ?ST with Some _ => _ | None => _ end] |- _ ] =>
+               destruct (value_of FUEL ENV EXP ST) eqn:?; try congruence
+             | [ _ : context[let (_, _) := ?RES in _] |- _ ] =>
+               destruct RES eqn:?
+             | [ H : value_of ?FUEL ?ENV ?EXP ?ST = _ |- _ ] =>
+               apply fuel_order with (fuel' := fuel') in H; eauto; rewrite H; clear H
+             | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
+               destruct BEH; try congruence
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ | ValRef _ => _ end] |- _ ] =>
+               destruct VAL; try congruence
+             | [ _ : context[if ?B then _ else _] |- _ ] =>
+               destruct B
+             end;
+      eauto.
+  Qed.
+  
   Lemma le_max_1 : forall a b c, a <= max (max a b) c.
     intros.
     rewrite <- max_assoc.
@@ -585,7 +703,43 @@ Module ExplicitRefsImpl.
       value_of_rel env tm beh st0 st1 ->
       exists fuel, value_of_term fuel env tm st0 = Some (beh, st1).
   Proof.
-  Admitted.
+    induction 1; auto;
+      match goal with
+      | [ IH1 : exists _, _, IH2 : exists _, _ |- _ ] =>
+        destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ]; exists (S (max fuel1 fuel2))
+      | [ IH1 : exists _, _ |- _ ] =>
+        destruct IH1 as [ fuel1 ? ]; exists (S fuel1)
+      | [ |- _ ] =>
+        exists 1
+      end;
+      unfold value_of_term in *;
+      try match goal with
+      | [ |- value_of _ _ _ _ = _ ] => rewrite value_of_equation
+      end;
+      repeat match goal with
+             | [ _ : context[match value_of ?FUEL ?ENV ?EXP ?ST with Some _ => _ | None => _ end] |- _ ] =>
+               destruct (value_of FUEL ENV EXP ST) eqn:?; try congruence
+             | [ _ : context[let (_, _) := ?RES in _] |- _ ] =>
+               destruct RES eqn:?
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ | ValRef _ => _ end] |- _ ] =>
+               destruct VAL; try congruence
+             | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
+               destruct BEH; try congruence
+             | [ _ : context[if ?B then _ else _] |- _ ] =>
+               destruct B
+             | [ H : value_of ?FUEL1 ?ENV ?EXP ?ST = _ |- context[value_of ?FUEL2 ?ENV ?EXP ?ST] ] =>
+               apply fuel_order with (fuel' := FUEL2) in H; eauto; rewrite H; clear H
+             | [ |- match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ | ValRef _ => _ end = _ ] =>
+               destruct VAL; try congruence
+             | [ |- context[let (_, _) := newref_store ?ST ?VAL in _] ] =>
+               destruct (newref_store ST VAL) eqn:?; try congruence
+             | [ H : setref_store _ _ _ = _ |- _ ] =>
+               try (rewrite H; clear H)
+             | [ H : abort _ |- _ ] =>
+               invert' H
+             end;
+      eauto.
+  Qed.
 
   Theorem value_of_completeness :
     forall env exp beh st0 st1,
