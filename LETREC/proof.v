@@ -218,7 +218,7 @@ Module LetrecImpl.
 
   Function value_of (fuel : nat) (env : environment) (exp : expression) : option behavior :=
     match fuel with
-    | 0 => None
+    | O => None
     | S fuel' =>
       match exp with
       | ExpConst n => Some (BehVal (ValNum (Z.of_nat n)))
