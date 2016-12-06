@@ -12,7 +12,7 @@ Definition loc := nat.
 Definition loc_eq : forall x y : loc, {x = y} + {x <> y} := eq_nat_dec.
 Infix "==l" := loc_eq (no associativity, at level 50).
 
-Module ExplicitRefsSpec.
+Module ImplicitRefsSpec.
   Inductive expression : Set :=
   | ExpConst : nat -> expression
   | ExpDiff : expression -> expression -> expression
@@ -22,75 +22,66 @@ Module ExplicitRefsSpec.
   | ExpLet : var -> expression -> expression -> expression
   | ExpProc : var -> expression -> expression
   | ExpCall : expression -> expression -> expression
-  | ExpNewref : expression -> expression
-  | ExpDeref : expression -> expression
-  | ExpSetref : expression -> expression -> expression.
+  | ExpAssign : var -> expression -> expression.
 
   Implicit Type exp : expression.
 
-  Inductive expval : Set :=
-  | ValNum : Z -> expval
-  | ValBool : bool -> expval
-  | ValClo : var -> expression -> environment -> expval
-  | ValRef : loc -> expval
+  Inductive denval : Set :=
+  | ValNum : Z -> denval
+  | ValBool : bool -> denval
+  | ValClo : var -> expression -> environment -> denval
 
   with environment : Set :=
        | EnvEmpty : environment
-       | EnvExtend : var -> expval -> environment -> environment.
+       | EnvExtend : var -> loc -> environment -> environment.
 
-  Implicit Type val : expval.
+  Implicit Type val : denval.
   Implicit Type env : environment.
 
   Inductive behavior : Set :=
-  | BehVal : expval -> behavior
+  | BehVal : denval -> behavior
   | BehErr : behavior.
 
   Implicit Type beh : behavior.
 
-  Coercion BehVal : expval >-> behavior.
+  Coercion BehVal : denval >-> behavior.
 
   Definition empty_env := EnvEmpty.
-  Definition extend_env (env : environment) (x : var) (v : expval) := EnvExtend x v env.
-  Fixpoint apply_env (env : environment) (x : var) : behavior :=
+  Definition extend_env (env : environment) (x : var) (l : loc) := EnvExtend x l env.
+  Fixpoint apply_env (env : environment) (x : var) : option loc :=
     match env with
-    | EnvEmpty => BehErr
-    | EnvExtend x' v env' => if x' ==v x then v else apply_env env' x
+    | EnvEmpty => None
+    | EnvExtend x' l env' => if x' ==v x then Some l else apply_env env' x
     end.
 
   Inductive term : Set :=
   | TmExp : expression -> term
   | TmDiff1 : behavior -> expression -> term
-  | TmDiff2 : expval -> behavior -> term
+  | TmDiff2 : denval -> behavior -> term
   | TmIsZero1 : behavior -> term
   | TmIf1 : behavior -> expression -> expression -> term
   | TmLet1 : var -> behavior -> expression -> term
   | TmCall1 : behavior -> expression -> term
-  | TmCall2 : expval -> behavior -> term
-  | TmNewref1 : behavior -> term
-  | TmDeref1 : behavior -> term
-  | TmSetref1 : behavior -> expression -> term
-  | TmSetref2 : expval -> behavior -> term.
+  | TmCall2 : denval -> behavior -> term
+  | TmAssign1 : var -> behavior -> term.
 
   Coercion TmExp : expression >-> term.
 
   Inductive abort : behavior -> Prop :=
   | AbrErr : abort BehErr.
 
-  Inductive is_num : expval -> Prop :=
+  Inductive is_num : denval -> Prop :=
   | IsNum : forall n, is_num (ValNum n).
 
-  Inductive is_bool : expval -> Prop :=
+  Inductive is_bool : denval -> Prop :=
   | IsBool : forall b, is_bool (ValBool b).
 
-  Inductive is_clo : expval -> Prop :=
+  Inductive is_clo : denval -> Prop :=
   | IsClo : forall x exp1 saved_env, is_clo (ValClo x exp1 saved_env).
 
-  Inductive is_ref : expval -> Prop :=
-  | IsRef : forall l, is_ref (ValRef l).
-
-  Definition store := list expval.
+  Definition store := list denval.
   Definition empty_store : store := nil.
-  Definition newref_store (st : store) (val : expval) : store * loc :=
+  Definition newref_store (st : store) (val : denval) : store * loc :=
     let l := length st in
     (app st (cons val nil), l).
   Definition deref_store (st : store) (l : loc) : behavior :=
@@ -98,7 +89,7 @@ Module ExplicitRefsSpec.
     | Some val => val
     | None => BehErr
     end.
-  Definition setref_store (st : store) (l : loc) (val : expval) : option store :=
+  Definition setref_store (st : store) (l : loc) (val : denval) : option store :=
     let inner :=
         fix f (st : store) (l : loc) : option store :=
           match st with
@@ -182,8 +173,13 @@ Module ExplicitRefsSpec.
         ~is_bool val1 ->
         value_of_rel env (TmIf1 val1 exp2 exp3) BehErr st st
   | VrelVar :
+      forall env x l st,
+        apply_env env x = Some l ->
+        value_of_rel env (ExpVar x) (deref_store st l) st st
+  | VrelVar_err :
       forall env x st,
-        value_of_rel env (ExpVar x) (apply_env env x) st st
+        apply_env env x = None ->
+        value_of_rel env (ExpVar x) BehErr st st
   | VrelLet :
       forall env exp1 beh1 st0 st1 x exp2 beh st2,
         value_of_rel env exp1 beh1 st0 st1->
@@ -194,9 +190,10 @@ Module ExplicitRefsSpec.
         abort beh1 ->
         value_of_rel env (TmLet1 x beh1 exp2) beh1 st st
   | VrelLet1 :
-      forall env x val1 exp2 beh2 st0 st1,
-        value_of_rel (extend_env env x val1) exp2 beh2 st0 st1 ->
-        value_of_rel env (TmLet1 x val1 exp2) beh2 st0 st1
+      forall st0 val1 st1 l env x exp2 beh2 st2,
+        newref_store st0 val1 = (st1, l) ->
+        value_of_rel (extend_env env x l) exp2 beh2 st1 st2 ->
+        value_of_rel env (TmLet1 x val1 exp2) beh2 st0 st2
   | VrelProc :
       forall env x exp1 st,
         value_of_rel env (ExpProc x exp1) (ValClo x exp1 env) st st
@@ -219,81 +216,46 @@ Module ExplicitRefsSpec.
         abort beh2 ->
         value_of_rel env (TmCall2 val1 beh2) beh2 st st
   | VrelCall2 :
-      forall saved_env x val2 exp1 beh st0 st1 env,
-        value_of_rel (extend_env saved_env x val2) exp1 beh st0 st1 ->
-        value_of_rel env (TmCall2 (ValClo x exp1 saved_env) val2) beh st0 st1
+      forall st0 val2 st1 l saved_env x exp1 beh st2 env,
+        newref_store st0 val2 = (st1, l) ->
+        value_of_rel (extend_env saved_env x l) exp1 beh st1 st2 ->
+        value_of_rel env (TmCall2 (ValClo x exp1 saved_env) val2) beh st0 st2
   | VrelCall2_err :
       forall val1 env val2 st,
         ~is_clo val1 ->
         value_of_rel env (TmCall2 val1 val2) BehErr st st
-  | VrelNewref :
-      forall env exp1 beh1 st0 st1 beh st2,
+  | VrelAssign :
+      forall env exp1 beh1 st0 st1 x beh st2,
         value_of_rel env exp1 beh1 st0 st1 ->
-        value_of_rel env (TmNewref1 beh1) beh st1 st2 ->
-        value_of_rel env (ExpNewref exp1) beh st0 st2
-  | VrelNewref1_abort :
-      forall beh1 env st,
+        value_of_rel env (TmAssign1 x beh1) beh st1 st2 ->
+        value_of_rel env (ExpAssign x exp1) beh st0 st2
+  | VrelAssign1_abort :
+      forall beh1 env x st,
         abort beh1 ->
-        value_of_rel env (TmNewref1 beh1) beh1 st st
-  | VrelNewref1 :
-      forall st0 val1 st1 l env,
-        newref_store st0 val1 = (st1, l) ->
-        value_of_rel env (TmNewref1 val1) (ValRef l) st0 st1
-  | VrelDeref :
-      forall env exp1 beh1 st0 st1 beh st2,
-        value_of_rel env exp1 beh1 st0 st1 ->
-        value_of_rel env (TmDeref1 beh1) beh st1 st2 ->
-        value_of_rel env (ExpDeref exp1) beh st0 st2
-  | VrelDeref1_abort :
-      forall beh1 env st,
-        abort beh1 ->
-        value_of_rel env (TmDeref1 beh1) beh1 st st
-  | VrelDeref1 :
-      forall env l st,
-        value_of_rel env (TmDeref1 (ValRef l)) (deref_store st l) st st
-  | VrelDeref1_err :
-      forall val1 env st,
-        ~is_ref val1 ->
-        value_of_rel env (TmDeref1 val1) BehErr st st
-  | VrelSetref :
-      forall env exp1 beh1 st0 st1 exp2 beh st2,
-        value_of_rel env exp1 beh1 st0 st1 ->
-        value_of_rel env (TmSetref1 beh1 exp2) beh st1 st2 ->
-        value_of_rel env (ExpSetref exp1 exp2) beh st0 st2
-  | VrelSetref1_abort :
-      forall beh1 env exp2 st,
-        abort beh1 ->
-        value_of_rel env (TmSetref1 beh1 exp2) beh1 st st
-  | VrelSetref1 :
-      forall env exp2 beh2 st0 st1 val1 beh st2,
-        value_of_rel env exp2 beh2 st0 st1 ->
-        value_of_rel env (TmSetref2 val1 beh2) beh st1 st2 ->
-        value_of_rel env (TmSetref1 val1 exp2) beh st0 st2
-  | VrelSetref2_abort :
-      forall beh2 env val1 st,
-        abort beh2 ->
-        value_of_rel env (TmSetref2 val1 beh2) beh2 st st
-  | VrelSetref2 :
-      forall st0 l val st1 env,
-        setref_store st0 l val = Some st1 ->
-        value_of_rel env (TmSetref2 (ValRef l) val) (ValNum 23) st0 st1
-  | VrelSetref2_err1 :
-      forall val1 env val2 st,
-        ~is_ref val1 ->
-        value_of_rel env (TmSetref2 val1 val2) BehErr st st
-  | VrelSetref2_err2 :
-      forall st l val env,
-        setref_store st l val = None ->
-        value_of_rel env (TmSetref2 (ValRef l) val) BehErr st st.
+        value_of_rel env (TmAssign1 x beh1) beh1 st st
+  | VrelAssign1 :
+      forall env x l st0 val1 st1,
+        apply_env env x = Some l ->
+        setref_store st0 l val1 = Some st1 ->
+        value_of_rel env (TmAssign1 x val1) (BehVal (ValNum 27)) st0 st1
+  | VrelAssign1_err1 :
+      forall env x val1 st,
+        apply_env env x = None ->
+        value_of_rel env (TmAssign1 x val1) BehErr st st
+  | VrelAssign1_err2 :
+      forall env x l st val1,
+        apply_env env x = Some l ->
+        setref_store st l val1 = None ->
+        value_of_rel env (TmAssign1 x val1) BehErr st st.
 
-  Hint Constructors expression expval environment behavior term abort is_num is_bool is_clo is_ref value_of_rel.
-End ExplicitRefsSpec.
+  Hint Constructors expression denval environment behavior term abort is_num is_bool is_clo value_of_rel.
+End ImplicitRefsSpec.
 
-Module ExplicitRefsImpl.
-  Export ExplicitRefsSpec.
+Module ImplicitRefsImpl.
+  Export ImplicitRefsSpec.
 
   Implicit Type exp : expression.
-  Implicit Type val : expval.
+  Implicit Type val : denval.
   Implicit Type env : environment.
   Implicit Type beh : behavior.
 
@@ -350,13 +312,18 @@ Module ExplicitRefsImpl.
             end
           | BehErr => Some (BehErr, st1)
           end
-      | ExpVar x => Some (apply_env env x, st)
+      | ExpVar x =>
+        match apply_env env x with
+        | Some l => Some (deref_store st l, st)
+        | None => Some (BehErr, st)
+        end
       | ExpLet x exp1 exp2 =>
         res1 <-- value_of fuel' env exp1 st;
           let (beh1, st1) := res1 in
           match beh1 with
           | BehVal val1 =>
-            value_of fuel' (extend_env env x val1) exp2 st1
+            let (st2, l) := newref_store st1 val1 in
+            value_of fuel' (extend_env env x l) exp2 st2
           | BehErr => Some (BehErr, st1)
           end
       | ExpProc x exp1 => Some (BehVal (ValClo x exp1 env), st)
@@ -371,52 +338,27 @@ Module ExplicitRefsImpl.
               | BehVal val2 =>
                 match val1 with
                 | ValClo x exp saved_env =>
-                  value_of fuel' (extend_env saved_env x val2) exp st2
+                  let (st3, l) := newref_store st2 val2 in
+                  value_of fuel' (extend_env saved_env x l) exp st3
                 | _ => Some (BehErr, st2)
                 end
               | BehErr => Some (BehErr, st2)
               end
           | BehErr => Some (BehErr, st1)
           end
-      | ExpNewref exp1 =>
+      | ExpAssign x exp1 =>
         res1 <-- value_of fuel' env exp1 st;
           let (beh1, st1) := res1 in
           match beh1 with
           | BehVal val1 =>
-            let (st2, l) := newref_store st1 val1 in
-            Some (BehVal (ValRef l), st2)
-          | BehErr => Some (BehErr, st1)
-          end
-      | ExpDeref exp1 =>
-        res1 <-- value_of fuel' env exp1 st;
-          let (beh1, st1) := res1 in
-          match beh1 with
-          | BehVal val1 =>
-            match val1 with
-            | ValRef l => Some (deref_store st1 l, st1)
-            | _ => Some (BehErr, st1)
+            match apply_env env x with
+            | Some l =>
+              match setref_store st1 l val1 with
+              | Some st2 => Some (BehVal (ValNum 27), st2)
+              | None => Some (BehErr, st1)
+              end
+            | None => Some (BehErr, st1)
             end
-          | BehErr => Some (BehErr, st1)
-          end
-      | ExpSetref exp1 exp2 =>
-        res1 <-- value_of fuel' env exp1 st;
-          let (beh1, st1) := res1 in
-          match beh1 with
-          | BehVal val1 =>
-            res2 <-- value_of fuel' env exp2 st1;
-              let (beh2, st2) := res2 in
-              match beh2 with
-              | BehVal val2 =>
-                match val1 with
-                | ValRef l =>
-                  match setref_store st2 l val2 with
-                  | Some st3 => Some (BehVal (ValNum 23), st3)
-                  | None => Some (BehErr, st2)
-                  end
-                | _ => Some (BehErr, st2)
-                end
-              | BehErr => Some (BehErr, st2)
-              end
           | BehErr => Some (BehErr, st1)
           end
       end
@@ -427,28 +369,16 @@ Module ExplicitRefsImpl.
   Hint Extern 3 => match goal with
                   | [ H : is_num (ValBool _) |- _ ] => inversion H; clear H
                   | [ H : is_num (ValClo _ _ _) |- _ ] => inversion H; clear H
-                  | [ H : is_num (ValRef _) |- _ ] => inversion H; clear H
                   | [ H : is_bool (ValNum _) |- _ ] => inversion H; clear H
                   | [ H : is_bool (ValClo _ _ _) |- _ ] => inversion H; clear H
-                  | [ H : is_bool (ValRef _) |- _ ] => inversion H; clear H
                   | [ H : is_clo (ValNum _) |- _ ] => inversion H; clear H
                   | [ H : is_clo (ValBool _) |- _ ] => inversion H; clear H
-                  | [ H : is_clo (ValRef _) |- _ ] => inversion H; clear H
-                  | [ H : is_ref (ValNum _)  |- _ ] => inversion H; clear H
-                  | [ H : is_ref (ValBool _) |- _ ] => inversion H; clear H
-                  | [ H : is_ref (ValClo _ _ _) |- _ ] => inversion H; clear H
                   | [ |- context[is_num (ValBool _)] ] => intuition
                   | [ |- context[is_num (ValClo _ _ _)] ] => intuition
-                  | [ |- context[is_num (ValRef _)] ] => intuition
                   | [ |- context[is_bool (ValNum _)] ] => intuition
                   | [ |- context[is_bool (ValClo _ _ _)] ] => intuition
-                  | [ |- context[is_bool (ValRef _)] ] => intuition
                   | [ |- context[is_clo (ValNum _)] ] => intuition
                   | [ |- context[is_clo (ValBool _)] ] => intuition
-                  | [ |- context[is_clo (ValRef _)] ] => intuition
-                  | [ |- context[is_ref (ValNum _)] ] => intuition
-                  | [ |- context[is_ref (ValBool _)] ] => intuition
-                  | [ |- context[is_ref (ValClo _ _ _)] ] => intuition
                   | [ H : ~ _ |- _ ] => contradict H
                   end.
 
@@ -470,11 +400,13 @@ Module ExplicitRefsImpl.
                destruct (value_of FUEL ENV EXP ST) eqn:?; try congruence
              | [ _ : context[match setref_store ?ST ?L ?VAL with Some _ => _ | None => _ end] |- _ ] =>
                destruct (setref_store ST L VAL) eqn:?; try congruence
+             | [ _ : context[match apply_env ?ENV ?VAR with Some _ => _ | None => _ end] |- _ ] =>
+               destruct (apply_env ENV VAR) eqn:?; try congruence
              | [ _ : context[let (_, _) := ?RES in _] |- _ ] =>
                destruct RES eqn:?
              | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
                destruct BEH; try congruence
-             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ | ValRef _ => _ end] |- _ ] =>
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
                destruct VAL; try congruence
              | [ _ : context[if ?B then _ else _] |- _ ] =>
                destruct B
@@ -535,7 +467,8 @@ Module ExplicitRefsImpl.
     | TmLet1 x beh1 exp2 =>
       match beh1 with
       | BehVal val1 =>
-        value_of fuel (extend_env env x val1) exp2 st
+        let (st1, l) := newref_store st val1 in
+        value_of fuel (extend_env env x l) exp2 st1
       | BehErr => Some (BehErr, st)
       end
     | TmCall1 beh1 exp2 =>
@@ -547,7 +480,8 @@ Module ExplicitRefsImpl.
           | BehVal val2 =>
             match val1 with
             | ValClo x exp saved_env =>
-              value_of fuel (extend_env saved_env x val2) exp st2
+              let (st3, l) := newref_store st2 val2 in
+              value_of fuel (extend_env saved_env x l) exp st3
             | _ => Some (BehErr, st2)
             end
           | BehErr => Some (BehErr, st2)
@@ -559,56 +493,22 @@ Module ExplicitRefsImpl.
       | BehVal val2 =>
         match val1 with
         | ValClo x exp saved_env =>
-          value_of fuel (extend_env saved_env x val2) exp st
+          let (st1, l) := newref_store st val2 in
+          value_of fuel (extend_env saved_env x l) exp st1
         | _ => Some (BehErr, st)
         end
       | BehErr => Some (BehErr, st)
       end
-    | TmNewref1 beh1 =>
+    | TmAssign1 x beh1 =>
       match beh1 with
       | BehVal val1 =>
-        let (st2, l) := newref_store st val1 in
-        Some (BehVal (ValRef l), st2)
-      | BehErr => Some (BehErr, st)
-      end
-    | TmDeref1 beh1 =>
-      match beh1 with
-      | BehVal val1 =>
-        match val1 with
-        | ValRef l => Some (deref_store st l, st)
-        | _ => Some (BehErr, st)
-        end
-      | BehErr => Some (BehErr, st)
-      end
-    | TmSetref1 beh1 exp2 =>
-      match beh1 with
-      | BehVal val1 =>
-        res2 <-- value_of fuel env exp2 st;
-          let (beh2, st2) := res2 in
-          match beh2 with
-          | BehVal val2 =>
-            match val1 with
-            | ValRef l =>
-              match setref_store st2 l val2 with
-              | Some st3 => Some (BehVal (ValNum 23), st3)
-              | None => Some (BehErr, st2)
-              end
-            | _ => Some (BehErr, st2)
-            end
-          | BehErr => Some (BehErr, st2)
-          end
-      | BehErr => Some (BehErr, st)
-      end
-    | TmSetref2 val1 beh2 =>
-      match beh2 with
-      | BehVal val2 =>
-        match val1 with
-        | ValRef l =>
-          match setref_store st l val2 with
-          | Some st3 => Some (BehVal (ValNum 23), st3)
+        match apply_env env x with
+        | Some l =>
+          match setref_store st l val1 with
+          | Some st1 => Some (BehVal (ValNum 27), st1)
           | None => Some (BehErr, st)
           end
-        | _ => Some (BehErr, st)
+        | None => Some (BehErr, st)
         end
       | BehErr => Some (BehErr, st)
       end
@@ -627,15 +527,18 @@ Module ExplicitRefsImpl.
                destruct RES eqn:?
              | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
                destruct BEH; try congruence
-             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ | ValRef _ => _ end] |- _ ] =>
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
                destruct VAL; try congruence
              | [ _ : context[if ?B then _ else _] |- _ ] =>
                destruct B
              | [ IH : forall _, _, H : value_of _ _ _ _ = _ |- _ ] =>
                apply IH in H; try congruence; rewrite H
+             | [ |- context[let (_, _) := ?RES in _] ] =>
+               destruct RES
+             | [ H : (_, _) = (_, _) |- _ ] =>
+               invert' H
              end;
       eauto.
-    destruct (newref_store s e0); congruence.
   Qed.
 
   Hint Resolve fuel_incr.
@@ -665,7 +568,7 @@ Module ExplicitRefsImpl.
                apply fuel_order with (fuel' := fuel') in H; eauto; rewrite H; clear H
              | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
                destruct BEH; try congruence
-             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ | ValRef _ => _ end] |- _ ] =>
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
                destruct VAL; try congruence
              | [ _ : context[if ?B then _ else _] |- _ ] =>
                destruct B
@@ -716,7 +619,7 @@ Module ExplicitRefsImpl.
                destruct (value_of FUEL ENV EXP ST) eqn:?; try congruence
              | [ _ : context[let (_, _) := ?RES in _] |- _ ] =>
                destruct RES eqn:?
-             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ | ValRef _ => _ end] |- _ ] =>
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
                destruct VAL; try congruence
              | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
                destruct BEH; try congruence
@@ -724,13 +627,19 @@ Module ExplicitRefsImpl.
                destruct B
              | [ H : value_of ?FUEL1 ?ENV ?EXP ?ST = _ |- context[value_of ?FUEL2 ?ENV ?EXP ?ST] ] =>
                apply fuel_order with (fuel' := FUEL2) in H; eauto; rewrite H; clear H
-             | [ |- match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ | ValRef _ => _ end = _ ] =>
+             | [ |- match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end = _ ] =>
                destruct VAL; try congruence
+             | [ |- context[match apply_env ?ENV ?VAR with Some _ => _ | None => _ end] ] =>
+               destruct (apply_env ENV VAR) eqn:?; try congruence
+             | [ |- context[match setref_store ?ST ?L ?VAL with Some _ => _ | None => _ end] ] =>
+               destruct (setref_store ST L VAL) eqn:?; try congruence
              | [ |- context[let (_, _) := newref_store ?ST ?VAL in _] ] =>
                destruct (newref_store ST VAL) eqn:?; try congruence
              | [ H : setref_store _ _ _ = _ |- _ ] =>
                try (rewrite H; clear H)
              | [ H : abort _ |- _ ] =>
+               invert' H
+             | [ H : (_, _) = (_, _) |- _ ] =>
                invert' H
              end;
       eauto.
@@ -754,6 +663,6 @@ Module ExplicitRefsImpl.
   Proof.
     intuition.
   Qed.
-End ExplicitRefsImpl.
+End ImplicitRefsImpl.
 
-Export ExplicitRefsImpl.
+Export ImplicitRefsImpl.
