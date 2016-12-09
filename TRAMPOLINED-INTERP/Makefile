@@ -1,6 +1,6 @@
 OBJS = syntax.cmo core.cmo main.cmo
 
-.PHONY: proof clean
+.PHONY: clean
 
 TRAMPOLINED-INTERP.exe: $(OBJS)
 	@echo Linking $@
@@ -18,10 +18,5 @@ main.cmo: syntax.cmi core.cmi
 %.cmo: %.ml
 	ocamlc -c -I `camlp5 -where` -pp 'camlp5o pa_extend.cmo' $<
 
-proof: proof.vo
-
-proof.vo: proof.v
-	coqc $<
-
 clean:
-	rm -rf *.exe *.cmi *.cmo *.vo *.glob
+	rm -rf *.exe *.cmi *.cmo
