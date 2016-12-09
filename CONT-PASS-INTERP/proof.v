@@ -310,12 +310,12 @@ Module LetrecImpl.
   
   Ltac invert' H := inversion H; clear H; subst.
 
-  Inductive value_of_rel__cont : environment -> expression -> continuation -> behavior -> Prop :=
+  Inductive value_of_rel__cont : environment -> term -> continuation -> behavior -> Prop :=
   | VrelCont :
-      forall env exp beh cont beh',
-        value_of_rel env exp beh ->
+      forall env tm beh cont beh',
+        value_of_rel env tm beh ->
         apply_cont_rel cont beh beh' ->
-        value_of_rel__cont env exp cont beh'
+        value_of_rel__cont env tm cont beh'
 
   with apply_cont_rel : continuation -> behavior -> behavior -> Prop :=
        | ArelEnd :
@@ -588,130 +588,178 @@ Module LetrecImpl.
     assumption.
   Qed.
 
-  (* Definition value_of_term (fuel : nat) (env : environment) (tm : term) : option behavior := *)
-  (*   match tm with *)
-  (*   | TmExp exp => value_of fuel env exp *)
-  (*   | TmDiff1 beh1 exp2 => *)
-  (*     val1 <- beh1; *)
-  (*       beh2 <-- value_of fuel env exp2; *)
-  (*       val2 <- beh2; *)
-  (*       match (val1, val2) with *)
-  (*       | (ValNum n1, ValNum n2) => Some (BehVal (ValNum (n1 - n2))) *)
-  (*       | _ => Some BehErr *)
-  (*       end *)
-  (*   | TmDiff2 val1 beh2 => *)
-  (*     val2 <- beh2; *)
-  (*       match (val1, val2) with *)
-  (*       | (ValNum n1, ValNum n2) => Some (BehVal (ValNum (n1 - n2))) *)
-  (*       | _ => Some BehErr *)
-  (*       end *)
-  (*   | TmIsZero1 beh1 => *)
-  (*     val1 <- beh1; *)
-  (*       match val1 with *)
-  (*       | ValNum n1 => Some (BehVal (ValBool (Z.eqb n1 0))) *)
-  (*       | _ => Some BehErr *)
-  (*       end *)
-  (*   | TmIf1 beh1 exp2 exp3 => *)
-  (*     val1 <- beh1; *)
-  (*       match val1 with *)
-  (*       | ValBool true => value_of fuel env exp2 *)
-  (*       | ValBool false => value_of fuel env exp3 *)
-  (*       | _ => Some BehErr *)
-  (*       end *)
-  (*   | TmLet1 x beh1 exp2 => *)
-  (*     val1 <- beh1; *)
-  (*       value_of fuel (extend_env env x val1) exp2 *)
-  (*   | TmCall1 beh1 exp2 => *)
-  (*     val1 <- beh1; *)
-  (*       beh2 <-- value_of fuel env exp2; *)
-  (*       val2 <- beh2; *)
-  (*       match val1 with *)
-  (*       | ValClo x exp saved_env => *)
-  (*         value_of fuel (extend_env saved_env x val2) exp *)
-  (*       | _ => Some BehErr *)
-  (*       end *)
-  (*   | TmCall2 val1 beh2 => *)
-  (*     val2 <- beh2; *)
-  (*       match val1 with *)
-  (*       | ValClo x exp saved_env => *)
-  (*         value_of fuel (extend_env saved_env x val2) exp *)
-  (*       | _ => Some BehErr *)
-  (*       end *)
-  (*   end. *)
+  Definition value_of_term (fuel : nat) (env : environment) (tm : term) (cont : continuation) : option behavior :=
+    match tm with
+    | TmExp exp => value_of fuel env exp cont
+    | TmDiff1 beh1 exp2 =>
+      val1 <- beh1;
+        beh2 <-- value_of fuel env exp2 cont;
+        val2 <- beh2;
+        match (val1, val2) with
+        | (ValNum n1, ValNum n2) => Some (BehVal (ValNum (n1 - n2)))
+        | _ => Some BehErr
+        end
+    | TmDiff2 val1 beh2 =>
+      val2 <- beh2;
+        match (val1, val2) with
+        | (ValNum n1, ValNum n2) => Some (BehVal (ValNum (n1 - n2)))
+        | _ => Some BehErr
+        end
+    | TmIsZero1 beh1 =>
+      val1 <- beh1;
+        match val1 with
+        | ValNum n1 => Some (BehVal (ValBool (Z.eqb n1 0)))
+        | _ => Some BehErr
+        end
+    | TmIf1 beh1 exp2 exp3 =>
+      val1 <- beh1;
+        match val1 with
+        | ValBool true => value_of fuel env exp2 cont
+        | ValBool false => value_of fuel env exp3 cont
+        | _ => Some BehErr
+        end
+    | TmLet1 x beh1 exp2 =>
+      val1 <- beh1;
+        value_of fuel (extend_env env x val1) exp2 cont
+    | TmCall1 beh1 exp2 =>
+      val1 <- beh1;
+        beh2 <-- value_of fuel env exp2 cont;
+        val2 <- beh2;
+        match val1 with
+        | ValClo x exp saved_env =>
+          value_of fuel (extend_env saved_env x val2) exp cont
+        | _ => Some BehErr
+        end
+    | TmCall2 val1 beh2 =>
+      val2 <- beh2;
+        match val1 with
+        | ValClo x exp saved_env =>
+          value_of fuel (extend_env saved_env x val2) exp cont
+        | _ => Some BehErr
+        end
+    end.
 
-  (* Lemma fuel_incr : *)
-  (*   forall fuel env exp beh, *)
-  (*     value_of fuel env exp = Some beh -> *)
-  (*     value_of (S fuel) env exp = Some beh. *)
-  (* Proof. *)
-  (*   induction fuel; intros; rewrite value_of_equation in *; subst; try congruence; destruct exp; *)
-  (*     repeat match goal with *)
-  (*            | [ _ : context[match value_of ?FUEL ?ENV ?EXP with Some _ => _ | None => _ end] |- _ ] => *)
-  (*              destruct (value_of FUEL ENV EXP) eqn:?; try congruence *)
-  (*            | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] => *)
-  (*              destruct BEH *)
-  (*            | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] => *)
-  (*              destruct VAL; try congruence *)
-  (*            | [ _ : context[if ?B then _ else _] |- _ ] => *)
-  (*              destruct B *)
-  (*            | [ IH : forall _, _, H : value_of _ _ _ = _ |- _ ] => *)
-  (*              apply IH in H; try congruence; rewrite H *)
-  (*            end; *)
-  (*     eauto. *)
-  (* Qed. *)
+  Lemma value_of_fuel_incr :
+    forall fuel env exp cont beh,
+      value_of fuel env exp cont = Some beh ->
+      value_of (S fuel) env exp cont = Some beh
+  with apply_cont_fuel_incr :
+         forall fuel cont beh beh',
+           apply_cont fuel cont beh = Some beh' ->
+           apply_cont (S fuel) cont beh = Some beh'.
+  Proof.
+    induction fuel; intros; simpl in H; subst; try discriminate.
+    clear value_of_fuel_incr.
+    destruct exp;
+      repeat match goal with
+             | [ _ : context[match value_of ?FUEL ?ENV ?EXP ?CONT with Some _ => _ | None => _ end] |- _ ] =>
+               destruct (value_of FUEL ENV EXP CONT) eqn:?; try congruence
+             | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
+               destruct BEH eqn:?; try congruence
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
+               destruct VAL; try congruence
+             | [ _ : context[if ?B then _ else _] |- _ ] =>
+               destruct B
+             end;
+      eauto.
+    {
+      simpl.
+      rewrite Heqb.
+      apply apply_cont_fuel_incr in H.
+      eauto.
+    }
+    {
+      simpl.
+      rewrite Heqb.
+      eauto.
+    }
 
-  (* Hint Resolve fuel_incr. *)
+    induction fuel; intros; simpl in H; subst; try discriminate.
+    clear apply_cont_fuel_incr.
+    destruct cont;
+      repeat match goal with
+             | [ _ : context[match apply_cont ?FUEL ?CONT ?BEH with Some _ => _ | None => _ end] |- _ ] =>
+               destruct (apply_cont FUEL CONT BEH) eqn:?; try congruence
+             | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
+               destruct BEH; try congruence
+             | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
+               destruct VAL; try congruence
+             | [ _ : context[if ?B then _ else _] |- _ ] =>
+               destruct B
+             end;
+      eauto.
+  Qed.
 
-  (* Lemma fuel_order : *)
-  (*   forall fuel env exp beh fuel', *)
-  (*     value_of fuel env exp = Some beh -> *)
-  (*     fuel <= fuel' -> *)
-  (*     value_of fuel' env exp = Some beh. *)
-  (* Proof. *)
-  (*   induction 2; auto. *)
-  (* Qed. *)
+  Hint Resolve value_of_fuel_incr.
 
-  (* Hint Resolve fuel_order. *)
+  Lemma value_of_fuel_order :
+    forall fuel env exp cont beh fuel',
+      value_of fuel env exp cont = Some beh ->
+      fuel <= fuel' ->
+      value_of fuel' env exp cont = Some beh.
+  Proof.
+    induction 2; auto.
+  Qed.
 
-  (* Lemma fuel_order_tm : *)
-  (*   forall fuel env tm beh fuel', *)
-  (*     value_of_term fuel env tm = Some beh -> *)
-  (*     fuel <= fuel' -> *)
-  (*     value_of_term fuel' env tm = Some beh. *)
-  (* Proof. *)
-  (*   intros; destruct tm; simpl in *; eauto; *)
-  (*   repeat match goal with *)
-  (*          | [ _ : context[match value_of ?FUEL ?ENV ?EXP with Some _ => _ | None => _ end] |- _ ] => *)
-  (*            destruct (value_of FUEL ENV EXP) eqn:T; try congruence; apply fuel_order with (fuel' := fuel') in T; eauto; rewrite T *)
-  (*          | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] => *)
-  (*            destruct BEH; try congruence *)
-  (*          | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] => *)
-  (*            destruct VAL; try congruence *)
-  (*          | [ _ : context[if ?B then _ else _] |- _ ] => *)
-  (*            destruct B *)
-  (*          end; *)
-  (*     eauto. *)
-  (* Qed. *)
+  Hint Resolve value_of_fuel_order.
 
-  (* Lemma le_max_1 : forall a b c, a <= max (max a b) c. *)
-  (*   intros. *)
-  (*   rewrite <- max_assoc. *)
-  (*   apply le_max_l. *)
-  (* Qed. *)
+  Lemma fuel_order_tm :
+    forall fuel env tm cont beh fuel',
+      value_of_term fuel env tm cont = Some beh ->
+      fuel <= fuel' ->
+      value_of_term fuel' env tm cont = Some beh.
+  Proof.
+    intros; destruct tm; simpl in *; eauto;
+    repeat match goal with
+           | [ _ : context[match value_of ?FUEL ?ENV ?EXP ?CONT with Some _ => _ | None => _ end] |- _ ] =>
+             destruct (value_of FUEL ENV EXP CONT) eqn:T; try congruence; apply value_of_fuel_order with (fuel' := fuel') in T; eauto; rewrite T
+           | [ _ : context[match ?BEH with BehVal _ => _ | BehErr => _ end] |- _ ] =>
+             destruct BEH; try congruence
+           | [ _ : context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] |- _ ] =>
+             destruct VAL; try congruence
+           | [ _ : context[if ?B then _ else _] |- _ ] =>
+             destruct B
+           end;
+      eauto.
+  Qed.
 
-  (* Lemma le_max_2 : forall a b c, b <= max (max a b) c. *)
-  (*   intros. *)
-  (*   rewrite (max_comm a b). *)
-  (*   rewrite <- max_assoc. *)
-  (*   apply le_max_l. *)
-  (* Qed. *)
+  Lemma le_max_1 : forall a b c, a <= max (max a b) c.
+    intros.
+    rewrite <- max_assoc.
+    apply le_max_l.
+  Qed.
 
-  (* Lemma le_max_3 : forall a b c, c <= max (max a b) c. *)
-  (*   intros. *)
-  (*   apply le_max_r. *)
-  (* Qed. *)
+  Lemma le_max_2 : forall a b c, b <= max (max a b) c.
+    intros.
+    rewrite (max_comm a b).
+    rewrite <- max_assoc.
+    apply le_max_l.
+  Qed.
 
-  (* Hint Resolve le_max_l le_max_r le_max_1 le_max_2 le_max_3. *)
+  Lemma le_max_3 : forall a b c, c <= max (max a b) c.
+    intros.
+    apply le_max_r.
+  Qed.
+
+  Hint Resolve le_max_l le_max_r le_max_1 le_max_2 le_max_3.
+
+  Theorem value_of_term_completeness__cont :
+    forall env tm cont beh,
+      value_of_rel__cont env tm cont beh ->
+      exists fuel, value_of_term fuel env tm cont = Some beh.
+  Proof.
+  Admitted.
+
+  Theorem value_of_term_completeness :
+    forall env tm beh,
+      value_of_rel env tm beh ->
+      exists fuel, value_of_term fuel env tm ContEnd = Some beh.
+  Proof.
+    intros.
+    assert (T := VrelCont H (ArelEnd beh)).
+    apply value_of_term_completeness__cont in T.
+    assumption.
+  Qed.
 
   (* Theorem value_of_term_completeness : *)
   (*   forall env tm beh, *)
@@ -748,24 +796,24 @@ Module LetrecImpl.
   (*     eauto. *)
   (* Qed. *)
 
-  (* Theorem value_of_completeness : *)
-  (*   forall env exp beh, *)
-  (*     value_of_rel env exp beh -> *)
-  (*     exists fuel, value_of fuel env exp = Some beh. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   apply value_of_term_completeness in H; auto. *)
-  (* Qed. *)
+  Theorem value_of_completeness :
+    forall env exp beh,
+      value_of_rel env exp beh ->
+      exists fuel, value_of fuel env exp ContEnd = Some beh.
+  Proof.
+    intros.
+    apply value_of_term_completeness in H; auto.
+  Qed.
 
-  (* Hint Resolve value_of_soundness value_of_completeness. *)
+  Hint Resolve value_of_soundness value_of_completeness.
 
-  (* Theorem value_of_correctness : *)
-  (*   forall env exp beh, *)
-  (*     (exists fuel, value_of fuel env exp = Some beh) <-> *)
-  (*     value_of_rel env exp beh. *)
-  (* Proof. *)
-  (*   intuition. *)
-  (* Qed. *)
+  Theorem value_of_correctness :
+    forall env exp beh,
+      (exists fuel, value_of fuel env exp ContEnd = Some beh) <->
+      value_of_rel env exp beh.
+  Proof.
+    intuition.
+  Qed.
 End LetrecImpl.
 
 Export LetrecImpl.
