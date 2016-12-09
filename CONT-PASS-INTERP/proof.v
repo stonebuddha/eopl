@@ -228,7 +228,7 @@ Module LetrecImpl.
      end)
       (right associativity, at level 60).
 
-  Function value_of (fuel : nat) (env : environment) (exp : expression) (cont : continuation) : option behavior :=
+  Fixpoint value_of (fuel : nat) (env : environment) (exp : expression) (cont : continuation) : option behavior :=
     match fuel with
     | O => None
     | S fuel' =>
@@ -250,39 +250,46 @@ Module LetrecImpl.
       end
     end
 
-  with apply_cont (fuel : nat) (cont : continuation) (val : expval) : option behavior :=
+  with apply_cont (fuel : nat) (cont : continuation) (beh : behavior) : option behavior :=
          match fuel with
          | O => None
          | S fuel' =>
            match cont with
-           | ContEnd => Some (BehVal val)
+           | ContEnd => Some beh
            | ContDiff1 exp2 env cont' =>
-             value_of fuel' env exp2 (ContDiff2 val cont')
+             val1 <- beh;
+               value_of fuel' env exp2 (ContDiff2 val1 cont')
            | ContDiff2 val1 cont' =>
-             match (val1, val) with
-             | (ValNum n1, ValNum n2) => apply_cont fuel' cont' (ValNum (n1 - n2))
-             | _ => Some BehErr
-             end
+             val2 <- beh;
+               match (val1, val2) with
+               | (ValNum n1, ValNum n2) => apply_cont fuel' cont' (ValNum (n1 - n2))
+               | _ => Some BehErr
+               end
            | ContIsZero cont' =>
-             match val with
-             | ValNum n1 => apply_cont fuel' cont' (ValBool (Z.eqb n1 0))
-             | _ => Some BehErr
-             end
+             val1 <- beh;
+               match val1 with
+               | ValNum n1 => apply_cont fuel' cont' (ValBool (Z.eqb n1 0))
+               | _ => Some BehErr
+               end
            | ContIf exp2 exp3 env cont' =>
-             match val with
-             | ValBool true => value_of fuel' env exp2 cont'
-             | ValBool false => value_of fuel' env exp3 cont'
-             | _ => Some BehErr
-             end
+             val1 <- beh;
+               match val1 with
+               | ValBool true => value_of fuel' env exp2 cont'
+               | ValBool false => value_of fuel' env exp3 cont'
+               | _ => Some BehErr
+               end
            | ContLet x exp2 env cont' =>
-             value_of fuel' (extend_env env x val) exp2 cont'
+             val1 <- beh;
+               value_of fuel' (extend_env env x val1) exp2 cont'
            | ContCall1 exp2 env cont' =>
-             value_of fuel' env exp2 (ContCall2 val cont')
+             val1 <- beh;
+               value_of fuel' env exp2 (ContCall2 val1 cont')
            | ContCall2 val1 cont' =>
-             match val1 with
-             | ValClo x exp saved_env => value_of fuel' (extend_env saved_env x val) exp cont'
-             | _ => Some BehErr
-             end
+             val2 <- beh;
+               match val1 with
+               | ValClo x exp saved_env => value_of fuel' (extend_env saved_env x val2) exp cont'
+               | _ => Some BehErr
+               end
            end
          end.
 
@@ -299,31 +306,33 @@ Module LetrecImpl.
                   | [ |- context[is_bool (ValClo _ _ _)] ] => intuition
                   | [ |- context[is_clo (ValNum _)] ] => intuition
                   | [ |- context[is_clo (ValBool _)] ] => intuition
-                  | [ H : ~ _ |- _ ] => contradict H
                   end.
   
   Ltac invert' H := inversion H; clear H; subst.
 
   Inductive value_of_rel__cont : environment -> expression -> continuation -> behavior -> Prop :=
   | VrelCont :
-      forall env exp val cont beh,
-        value_of_rel env exp val ->
-        apply_cont_rel cont val beh ->
-        value_of_rel__cont env exp cont beh
-  | VrelCont_abort :
-      forall beh env exp cont,
-        abort beh ->
+      forall env exp beh cont beh',
         value_of_rel env exp beh ->
-        value_of_rel__cont env exp cont beh
+        apply_cont_rel cont beh beh' ->
+        value_of_rel__cont env exp cont beh'
 
-  with apply_cont_rel : continuation -> expval -> behavior -> Prop :=
+  with apply_cont_rel : continuation -> behavior -> behavior -> Prop :=
        | ArelEnd :
-           forall val,
-             apply_cont_rel ContEnd val val
+           forall beh,
+             apply_cont_rel ContEnd beh beh
+       | ArelDiff1_abort :
+           forall beh1 exp2 env cont',
+             abort beh1 ->
+             apply_cont_rel (ContDiff1 exp2 env cont') beh1 beh1
        | ArelDiff1 :
            forall env exp2 val1 cont' beh,
              value_of_rel__cont env exp2 (ContDiff2 val1 cont') beh -> 
              apply_cont_rel (ContDiff1 exp2 env cont') val1 beh
+       | ArelDiff2_abort :
+           forall beh2 val1 cont',
+             abort beh2 ->
+             apply_cont_rel (ContDiff2 val1 cont') beh2 beh2
        | ArelDiff2 :
            forall cont' n1 n2 beh,
              apply_cont_rel cont' (ValNum (n1 - n2)) beh ->
@@ -332,6 +341,10 @@ Module LetrecImpl.
            forall val1 val2 cont',
              ~(is_num val1 /\ is_num val2) ->
              apply_cont_rel (ContDiff2 val1 cont') val2 BehErr
+       | ArelIsZero_abort :
+           forall beh1 cont',
+             abort beh1 ->
+             apply_cont_rel (ContIsZero cont') beh1 beh1
        | ArelIsZero :
            forall cont' n1 beh,
              apply_cont_rel cont' (ValBool (Z.eqb n1 0)) beh ->
@@ -340,6 +353,10 @@ Module LetrecImpl.
            forall val1 cont',
              ~is_num val1 ->
              apply_cont_rel (ContIsZero cont') val1 BehErr
+       | ArelIf_abort :
+           forall beh1 exp2 exp3 env cont',
+             abort beh1 ->
+             apply_cont_rel (ContIf exp2 exp3 env cont') beh1 beh1
        | ArelIfTrue :
            forall env exp2 cont' beh exp3,
              value_of_rel__cont env exp2 cont' beh ->
@@ -352,14 +369,26 @@ Module LetrecImpl.
            forall val1 exp2 exp3 env cont',
              ~is_bool val1 ->
              apply_cont_rel (ContIf exp2 exp3 env cont') val1 BehErr
+       | ArelLet_abort :
+           forall beh1 x exp2 env cont',
+             abort beh1 ->
+             apply_cont_rel (ContLet x exp2 env cont') beh1 beh1
        | ArelLet :
            forall env x val1 exp2 cont' beh,
              value_of_rel__cont (extend_env env x val1) exp2 cont' beh ->
              apply_cont_rel (ContLet x exp2 env cont') val1 beh
+       | ArelCall1_abort :
+           forall beh1 exp2 env cont',
+             abort beh1 ->
+             apply_cont_rel (ContCall1 exp2 env cont') beh1 beh1
        | ArelCall1 :
            forall env exp2 val1 cont' beh,
              value_of_rel__cont env exp2 (ContCall2 val1 cont') beh ->
              apply_cont_rel (ContCall1 exp2 env cont') val1 beh
+       | ArelCall2_abort :
+           forall beh2 val1 cont',
+             abort beh2 ->
+             apply_cont_rel (ContCall2 val1 cont') beh2 beh2
        | ArelCall2 :
            forall saved_env x val2 exp cont' beh,
              value_of_rel__cont (extend_env saved_env x val2) exp cont' beh ->
@@ -370,92 +399,194 @@ Module LetrecImpl.
              apply_cont_rel (ContCall2 val1 cont') val2 BehErr.
 
   Hint Constructors value_of_rel__cont apply_cont_rel.
+
+  Hint Extern 1 => match goal with
+                  | [ H : Some _ = Some _ |- _ ] => invert' H
+                  | [ H : abort _ |- _ ] => invert' H
+                  end.
+
+  Lemma apply_cont_err :
+    forall cont, apply_cont_rel cont BehErr BehErr.
+  Proof.
+    destruct cont; eauto.
+  Qed.
+
+  Hint Resolve apply_cont_err.
   
   Theorem value_of_soundness__cont :
-    forall env exp beh cont,
-      (exists fuel, value_of fuel env exp cont = Some beh) ->
+    forall fuel env exp beh cont,
+      value_of fuel env exp cont = Some beh ->
       value_of_rel__cont env exp cont beh
       with apply_cont_soundness :
-             forall cont val beh,
-               (exists fuel, apply_cont fuel cont val = Some beh) ->
-               apply_cont_rel cont val beh.
+             forall fuel cont beh beh',
+               apply_cont fuel cont beh = Some beh' ->
+               apply_cont_rel cont beh beh'.
   Proof.
-    intros.
-    destruct H as [ fuel ? ].
-    generalize dependent env.
-    generalize dependent exp.
-    generalize dependent cont.
-    generalize dependent beh.
-    induction fuel; intros; try discriminate; destruct exp.
+    induction fuel; intros; try discriminate.
+    clear value_of_soundness__cont.
+    destruct exp; eauto.
     {
-      eauto.
-    }
-    {
-      rewrite value_of_equation in H.
+      simpl in H.
       apply IHfuel in H.
       invert' H.
+      destruct beh0.
       {
-        invert' H1.
+        invert' H1; eauto.
         invert' H6.
+        destruct beh0; eauto.
         {
-          destruct val, val0.
-          {
-            invert' H1.
-            eauto.
-            eauto.
-          }
-          {
-            invert' H1.
-            clear H6.
-            eauto.
-          }
-          {
-            invert' H1.
-            clear H6.
-            eauto.
-          }
-          {
-            invert' H1.
-            clear H6.
-            eauto.
-          }
-          {
-            invert' H1.
-            clear H6.
-            eauto.
-          }
-          {
-            invert' H1.
-            clear H6.
-            eauto.
-          }
-          {
-            invert' H1.
-            clear H6.
-            eauto.
-          }
-          {
-            invert' H1.
-            clear H6.
-            eauto.
-          }
-          {
-            invert' H1.
-            clear H6.
-            eauto.
-          }
+          invert' H1; eauto.
         }
         {
-          invert' H.
-          eauto.
+          invert' H1; eauto.
         }
       }
       {
-        invert' H0.
+        invert' H1; eauto.
+      }
+    }
+    {
+      simpl in H.
+      apply IHfuel in H.
+      invert' H.
+      destruct beh0; eauto.
+      {
+        invert' H1; eauto.
+      }
+      {
+        invert' H1; eauto.
+      }
+    }
+    {
+      simpl in H.
+      apply IHfuel in H.
+      invert' H.
+      destruct beh0.
+      {
+        invert' H1; eauto.
+        {
+          invert' H7; eauto.
+        }
+        {
+          invert' H7; eauto.
+        }
+      }
+      {
+        invert' H1; eauto.
+      }
+    }
+    {
+      simpl in H.
+      destruct (apply_env env v) eqn:?.
+      {
+        apply apply_cont_soundness in H.
+        apply VrelCont with (beh := BehVal e); eauto.
+        rewrite <- Heqb.
+        eauto.
+      }
+      {
+        invert' H.
+        apply VrelCont with (beh := BehErr); eauto.
+        rewrite <- Heqb.
         eauto.
       }
     }
-  Admitted.
+    {
+      simpl in H.
+      apply IHfuel in H.
+      invert' H.
+      destruct beh0.
+      {
+        invert' H1; eauto.
+        invert' H7; eauto.
+      }
+      {
+        invert' H1; eauto.
+      }
+    }
+    {
+      simpl in H.
+      apply IHfuel in H.
+      invert' H.
+      destruct beh0.
+      {
+        invert' H1; eauto.
+        invert' H6.
+        invert' H1; eauto.
+        {
+          invert' H6; eauto.
+        }
+        {
+          invert' H6; eauto.
+        }
+      }
+      {
+        invert' H1; eauto.
+      }
+    }
+    {
+      simpl in H.
+      invert' H.
+      apply IHfuel in H1.
+      invert' H1.
+      eauto.
+    }
+
+    induction fuel; intros; try discriminate.
+    clear apply_cont_soundness.
+    destruct cont.
+    {
+      simpl in H.
+      eauto.
+    }
+    {
+      simpl in H.
+      destruct beh; eauto.
+    }
+    {
+      simpl in H.
+      destruct beh; eauto.
+      destruct e; eauto.
+      destruct e0; eauto.
+    }
+    {
+      simpl in H.
+      destruct beh; eauto.
+      destruct e; eauto.
+    }
+    {
+      simpl in H.
+      destruct beh; eauto.
+      destruct e2; eauto.
+      destruct b; eauto.
+    }
+    {
+      simpl in H.
+      destruct beh; eauto.
+    }
+    {
+      simpl in H.
+      destruct beh; eauto.
+    }
+    {
+      simpl in H.
+      destruct beh; eauto.
+      destruct e; eauto.
+    }
+  Qed.
+
+  Theorem value_of_soundness :
+    forall env exp beh,
+      (exists fuel, value_of fuel env exp ContEnd = Some beh) ->
+      value_of_rel env exp beh.
+  Proof.
+    intros.
+    destruct H.
+    apply value_of_soundness__cont in H.
+    invert' H.
+    invert' H1.
+    assumption.
+  Qed.
 
   (* Definition value_of_term (fuel : nat) (env : environment) (tm : term) : option behavior := *)
   (*   match tm with *)
