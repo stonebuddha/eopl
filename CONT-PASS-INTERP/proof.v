@@ -400,18 +400,21 @@ Module LetrecImpl.
 
   Hint Constructors value_of_rel__cont apply_cont_rel.
 
+  Scheme Induction for value_of_rel__cont Sort Prop
+  with Induction for apply_cont_rel Sort Prop.
+
   Hint Extern 1 => match goal with
                   | [ H : Some _ = Some _ |- _ ] => invert' H
                   | [ H : abort _ |- _ ] => invert' H
                   end.
 
-  Lemma apply_cont_err :
+  Lemma apply_cont_rel_err :
     forall cont, apply_cont_rel cont BehErr BehErr.
   Proof.
     destruct cont; eauto.
   Qed.
 
-  Hint Resolve apply_cont_err.
+  Hint Resolve apply_cont_rel_err.
   
   Theorem value_of_soundness__cont :
     forall fuel env exp beh cont,
@@ -593,22 +596,17 @@ Module LetrecImpl.
     | TmExp exp => value_of fuel env exp cont
     | TmDiff1 beh1 exp2 =>
       val1 <- beh1;
-        beh2 <-- value_of fuel env exp2 cont;
-        val2 <- beh2;
-        match (val1, val2) with
-        | (ValNum n1, ValNum n2) => Some (BehVal (ValNum (n1 - n2)))
-        | _ => Some BehErr
-        end
+        value_of fuel env exp2 (ContDiff2 val1 cont)
     | TmDiff2 val1 beh2 =>
       val2 <- beh2;
         match (val1, val2) with
-        | (ValNum n1, ValNum n2) => Some (BehVal (ValNum (n1 - n2)))
+        | (ValNum n1, ValNum n2) => apply_cont fuel cont (BehVal (ValNum (n1 - n2)))
         | _ => Some BehErr
         end
     | TmIsZero1 beh1 =>
       val1 <- beh1;
         match val1 with
-        | ValNum n1 => Some (BehVal (ValBool (Z.eqb n1 0)))
+        | ValNum n1 => apply_cont fuel cont (BehVal (ValBool (Z.eqb n1 0)))
         | _ => Some BehErr
         end
     | TmIf1 beh1 exp2 exp3 =>
@@ -623,13 +621,7 @@ Module LetrecImpl.
         value_of fuel (extend_env env x val1) exp2 cont
     | TmCall1 beh1 exp2 =>
       val1 <- beh1;
-        beh2 <-- value_of fuel env exp2 cont;
-        val2 <- beh2;
-        match val1 with
-        | ValClo x exp saved_env =>
-          value_of fuel (extend_env saved_env x val2) exp cont
-        | _ => Some BehErr
-        end
+        value_of fuel env exp2 (ContCall2 val1 cont)
     | TmCall2 val1 beh2 =>
       val2 <- beh2;
         match val1 with
@@ -690,7 +682,7 @@ Module LetrecImpl.
       eauto.
   Qed.
 
-  Hint Resolve value_of_fuel_incr.
+  Hint Resolve value_of_fuel_incr apply_cont_fuel_incr.
 
   Lemma value_of_fuel_order :
     forall fuel env exp cont beh fuel',
@@ -701,7 +693,16 @@ Module LetrecImpl.
     induction 2; auto.
   Qed.
 
-  Hint Resolve value_of_fuel_order.
+  Lemma apply_cont_fuel_order :
+    forall fuel cont beh beh' fuel',
+      apply_cont fuel cont beh = Some beh' ->
+      fuel <= fuel' ->
+      apply_cont fuel' cont beh = Some beh'.
+  Proof.
+    induction 2; eauto.
+  Qed.
+    
+  Hint Resolve value_of_fuel_order apply_cont_fuel_order.
 
   Lemma fuel_order_tm :
     forall fuel env tm cont beh fuel',
@@ -743,12 +744,545 @@ Module LetrecImpl.
 
   Hint Resolve le_max_l le_max_r le_max_1 le_max_2 le_max_3.
 
+  Lemma apply_cont_err :
+    forall fuel cont beh,
+      apply_cont fuel cont BehErr = Some beh ->
+      beh = BehErr.
+  Proof.
+    intros.
+    destruct fuel; try discriminate.
+    simpl in H.
+    destruct cont; eauto.
+  Qed.
+
   Theorem value_of_term_completeness__cont :
     forall env tm cont beh,
       value_of_rel__cont env tm cont beh ->
       exists fuel, value_of_term fuel env tm cont = Some beh.
   Proof.
-  Admitted.
+    apply (value_of_rel__cont_ind_dep
+             (fun env tm cont beh (H : value_of_rel__cont env tm cont beh) => exists fuel, value_of_term fuel env tm cont = Some beh)
+             (fun cont beh beh' (H : apply_cont_rel cont beh beh') => exists fuel, apply_cont fuel cont beh = Some beh')); intros.
+    generalize dependent cont.
+    generalize dependent beh'.
+    induction v; intros; eauto; simpl.
+    {
+      destruct H.
+      exists (S x).
+      eauto.
+    }
+    {
+      apply IHv2 in a; eauto.
+      destruct a.
+      simpl in H0.
+      destruct beh1.
+      {
+        assert (apply_cont_rel (ContDiff1 exp2 env cont) e beh'); eauto.
+        constructor.
+        apply value_of_soundness__cont with (fuel := x); eauto.
+        apply IHv1 in H1; eauto.
+        destruct H1.
+        simpl in H1.
+        exists (S x0).
+        eauto.
+        exists (S x).
+        eauto.
+      }
+      {
+        invert' H0.
+        assert (apply_cont_rel (ContDiff1 exp2 env cont) BehErr BehErr); eauto.
+        apply IHv1 in H0; eauto.
+        destruct H0.
+        exists (S x0).
+        eauto.
+        exists 1.
+        eauto.
+      }
+    }
+    {
+      invert' H.
+      destruct H0.
+      apply apply_cont_err in H.
+      subst.
+      eauto.
+    }
+    {
+      apply IHv2 in a; eauto.
+      destruct a.
+      simpl in H0.
+      destruct beh2.
+      {
+        destruct val1.
+        {
+          destruct e.
+          {
+            assert (apply_cont_rel (ContDiff2 (ValNum z) cont) (ValNum z0) beh'); eauto.
+            constructor.
+            apply apply_cont_soundness with (fuel := x); eauto.
+            apply IHv1 in H1; eauto.
+            exists (S x).
+            eauto.
+          }
+          {
+            invert' H0.
+            assert (apply_cont_rel (ContDiff2 (ValNum z) cont) (ValBool b) BehErr); eauto.
+            apply IHv1 in H0; eauto.
+            exists 1.
+            eauto.
+          }
+          {
+            invert' H0.
+            assert (apply_cont_rel (ContDiff2 (ValNum z) cont) (ValClo v e e0) BehErr); eauto.
+            apply IHv1 in H0; eauto.
+            exists 1.
+            eauto.
+          }
+        }
+        {
+          invert' H0.
+          assert (apply_cont_rel (ContDiff2 (ValBool b) cont) e BehErr); eauto.
+          apply IHv1 in H0; eauto.
+          exists 1.
+          eauto.
+        }
+        {
+          invert' H0.
+          assert (apply_cont_rel (ContDiff2 (ValClo v e0 e1) cont) e BehErr); eauto.
+          apply IHv1 in H0; eauto.
+          exists 1.
+          eauto.
+        }
+      }
+      {
+        invert' H0.
+        assert (apply_cont_rel (ContDiff2 val1 cont) BehErr BehErr); eauto.
+        apply IHv1 in H0; eauto.
+        exists 1.
+        eauto.
+      }
+    }
+    {
+      destruct beh2; eauto.
+      destruct H0.
+      apply apply_cont_err in H0.
+      subst.
+      eauto.
+    }
+    {
+      destruct H0.
+      apply apply_cont_err in H0.
+      subst.
+      destruct val1, val2; exists 1; eauto.
+      contradict H.
+      eauto.
+    }
+    {
+      apply IHv2 in a; eauto.
+      destruct a.
+      simpl in H0.
+      destruct beh1.
+      {
+        destruct e.
+        {
+          assert (apply_cont_rel (ContIsZero cont) (ValNum z) beh'); eauto.
+          constructor.
+          apply apply_cont_soundness with (fuel := x); eauto.
+          apply IHv1 in H1; eauto.
+          destruct H1.
+          simpl in H1.
+          exists (S x0).
+          eauto.
+          exists (S x).
+          eauto.
+        }
+        {
+          invert' H0.
+          assert (apply_cont_rel (ContIsZero cont) (ValBool b) BehErr); eauto.
+          apply IHv1 in H0; eauto.
+          destruct H0.
+          exists (S x0).
+          eauto.
+          exists 1.
+          eauto.
+        }
+        {
+          invert' H0.
+          assert (apply_cont_rel (ContIsZero cont) (ValClo v e e0) BehErr); eauto.
+          apply IHv1 in H0; eauto.
+          destruct H0.
+          exists (S x0).
+          eauto.
+          exists 1.
+          eauto.
+        }
+      }
+      {
+        invert' H0.
+        assert (apply_cont_rel (ContIsZero cont) BehErr BehErr); eauto.
+        apply IHv1 in H0; eauto.
+        destruct H0.
+        exists (S x0).
+        eauto.
+        exists 1.
+        eauto.
+      }
+    }
+    {
+      invert' H.
+      destruct H0.
+      apply apply_cont_err in H.
+      subst.
+      eauto.
+    }
+    {
+      destruct val1.
+      {
+        contradict H.
+        eauto.
+      }
+      {
+        destruct H0.
+        apply apply_cont_err in H0.
+        subst.
+        eauto.
+      }
+      {
+        destruct H0.
+        apply apply_cont_err in H0.
+        subst.
+        eauto.
+      }
+    }
+    {
+      apply IHv2 in a; eauto.
+      destruct a.
+      simpl in H0.
+      destruct beh1.
+      {
+        destruct e.
+        {
+          invert' H.
+          assert (apply_cont_rel (ContIf exp2 exp3 env cont) (ValNum z) BehErr); eauto.
+          apply IHv1 in H; eauto.
+          destruct H.
+          simpl in H.
+          exists (S x1).
+          eauto.
+          exists 1.
+          eauto.
+        }
+        {
+          destruct b.
+          {
+            assert (apply_cont_rel (ContIf exp2 exp3 env cont) (ValBool true) beh'); eauto.
+            constructor.
+            apply value_of_soundness__cont with (fuel := x); eauto.
+            apply IHv1 in H1; eauto.
+            destruct H1.
+            simpl in H1.
+            exists (S x0).
+            eauto.
+            exists (S x).
+            eauto.
+          }
+          {
+            assert (apply_cont_rel (ContIf exp2 exp3 env cont) (ValBool false) beh'); eauto.
+            constructor.
+            apply value_of_soundness__cont with (fuel := x); eauto.
+            apply IHv1 in H1; eauto.
+            destruct H1.
+            exists (S x0).
+            eauto.
+            exists (S x).
+            eauto.
+          }
+        }
+        {
+          invert' H0.
+          assert (apply_cont_rel (ContIf exp2 exp3 env cont) (ValClo v e e0) BehErr); eauto.
+          apply IHv1 in H0; eauto.
+          destruct H0.
+          simpl in H0.
+          exists (S x0).
+          eauto.
+          exists 1.
+          eauto.
+        }
+      }
+      {
+        invert' H0.
+        assert (apply_cont_rel (ContIf exp2 exp3 env cont) BehErr BehErr); eauto.
+        apply IHv1 in H0; eauto.
+        destruct H0.
+        simpl in H0.
+        exists (S x0).
+        eauto.
+        exists 1.
+        eauto.
+      }
+    }
+    {
+      invert' H.
+      destruct H0.
+      apply apply_cont_err in H.
+      subst.
+      eauto.
+    }
+    {
+      destruct H0.
+      apply apply_cont_err in H0.
+      subst.
+      destruct val1; eauto.
+      contradict H.
+      eauto.
+    }
+    {
+      destruct H.
+      exists (S x0).
+      simpl.
+      destruct (apply_env env x) eqn:?; eauto.
+      apply apply_cont_err in H.
+      subst.
+      eauto.
+    }
+    {
+      apply IHv2 in a; eauto.
+      destruct a.
+      simpl in H0.
+      destruct beh1.
+      {
+        assert (apply_cont_rel (ContLet x exp2 env cont) e beh'); eauto.
+        constructor.
+        apply value_of_soundness__cont with (fuel := x0); eauto.
+        apply IHv1 in H1; eauto.
+        destruct H1.
+        simpl in H1.
+        exists (S x1).
+        eauto.
+        exists (S x0).
+        eauto.
+      }
+      {
+        invert' H0.
+        assert (apply_cont_rel (ContLet x exp2 env cont) BehErr BehErr); eauto.
+        apply IHv1 in H0; eauto.
+        destruct H0.
+        simpl in H0.
+        exists (S x1).
+        eauto.
+        exists 1.
+        eauto.
+      }
+    }
+    {
+      invert' H.
+      destruct H0.
+      apply apply_cont_err in H.
+      subst.
+      eauto.
+    }
+    {      
+      destruct H.
+      exists (S x0).
+      eauto.
+    }
+    {
+      apply IHv2 in a; eauto.
+      destruct a.
+      simpl in H0.
+      destruct beh1.
+      {
+        assert (apply_cont_rel (ContCall1 exp2 env cont) e beh'); eauto.
+        constructor.
+        apply value_of_soundness__cont with (fuel := x); eauto.
+        apply IHv1 in H1; eauto.
+        destruct H1.
+        simpl in H1.
+        exists (S x0).
+        eauto.
+        exists (S x).
+        eauto.
+      }
+      {
+        invert' H0.
+        assert (apply_cont_rel (ContCall1 exp2 env cont) BehErr BehErr); eauto.
+        apply IHv1 in H0.
+        destruct H0.
+        simpl in H0.
+        exists (S x0).
+        eauto.
+        exists 1.
+        eauto.
+      }
+    }      
+    {
+      invert' H.
+      destruct H0.
+      apply apply_cont_err in H.
+      subst.
+      eauto.
+    }
+    {
+      apply IHv2 in a; eauto.
+      destruct a.
+      simpl in H0.
+      destruct beh2.
+      {
+        destruct val1.
+        {
+          invert' H0.
+          assert (apply_cont_rel (ContCall2 (ValNum z) cont) e BehErr); eauto.
+          apply IHv1 in H0; eauto.
+          exists 1.
+          eauto.
+        }
+        {
+          invert' H0.
+          assert (apply_cont_rel (ContCall2 (ValBool b) cont) e BehErr); eauto.
+          apply IHv1 in H0; eauto.
+          exists 1.
+          eauto.
+        }
+        {
+          assert (apply_cont_rel (ContCall2 (ValClo v e0 e1) cont) e beh'); eauto.
+          constructor.
+          apply value_of_soundness__cont with (fuel := x); eauto.
+          apply IHv1 in H1; eauto.
+          exists (S x).
+          eauto.
+        }
+      }
+      {
+        invert' H0.
+        assert (apply_cont_rel (ContCall2 val1 cont) BehErr BehErr); eauto.
+        apply IHv1 in H0; eauto.
+        exists 1.
+        eauto.
+      }
+    }
+    {
+      invert' H.
+      destruct H0.
+      apply apply_cont_err in H.
+      subst.
+      eauto.
+    }
+    {
+      destruct H0.
+      apply apply_cont_err in H0.
+      subst.
+      destruct val1; eauto.
+      contradict H.
+      eauto.
+    }
+    {
+      apply IHv in a; eauto.
+      destruct a.
+      simpl in H0.
+      exists (S x).
+      eauto.
+    }
+
+    {
+      exists 1.
+      eauto.
+    }
+    {
+      invert' a.
+      exists 1.
+      eauto.
+    }
+    {
+      destruct H.
+      exists (S x).
+      eauto.
+    }
+    {
+      invert' a.
+      exists 1.
+      eauto.
+    }
+    {
+      destruct H.
+      exists (S x).
+      eauto.
+    }
+    {
+      destruct val1, val2; exists 1; eauto.
+      contradict n.
+      eauto.
+    }
+    {
+      invert' a.
+      exists 1.
+      eauto.
+    }
+    {
+      destruct H.
+      exists (S x).
+      eauto.
+    }
+    {
+      destruct val1; exists 1; eauto.
+      contradict n.
+      eauto.
+    }
+    {
+      invert' a.
+      exists 1.
+      eauto.
+    }
+    {
+      destruct H.
+      exists (S x).
+      eauto.
+    }
+    {
+      destruct H.
+      exists (S x).
+      eauto.
+    }
+    {
+      destruct val1; exists 1; eauto.
+      contradict n.
+      eauto.
+    }
+    {
+      invert' a.
+      exists 1.
+      eauto.
+    }
+    {
+      destruct H.
+      exists (S x0).
+      eauto.
+    }
+    {
+      invert' a.
+      exists 1.
+      eauto.
+    }
+    {
+      destruct H.
+      exists (S x).
+      eauto.
+    }
+    {
+      invert' a.
+      exists 1.
+      eauto.
+    }
+    {
+      destruct H.
+      exists (S x0).
+      eauto.
+    }
+    {
+      destruct val1; exists 1; eauto.
+      contradict n.
+      eauto.
+    }
+  Qed.
 
   Theorem value_of_term_completeness :
     forall env tm beh,
@@ -760,41 +1294,6 @@ Module LetrecImpl.
     apply value_of_term_completeness__cont in T.
     assumption.
   Qed.
-
-  (* Theorem value_of_term_completeness : *)
-  (*   forall env tm beh, *)
-  (*     value_of_rel env tm beh -> *)
-  (*     exists fuel, value_of_term fuel env tm = Some beh. *)
-  (* Proof. *)
-  (*   induction 1; auto; *)
-  (*     match goal with *)
-  (*     | [ IH1 : exists _, _, IH2 : exists _, _ |- _ ] => *)
-  (*       destruct IH1 as [ fuel1 ? ]; destruct IH2 as [ fuel2 ? ]; exists (S (max fuel1 fuel2)) *)
-  (*     | [ IH1 : exists _, _ |- _ ] => *)
-  (*       destruct IH1 as [ fuel1 ? ]; exists (S fuel1) *)
-  (*     | [ |- _ ] => *)
-  (*       exists 1 *)
-  (*     end; *)
-  (*     unfold value_of_term in *; *)
-  (*     try match goal with *)
-  (*     | [ |- value_of _ _ _ = _ ] => rewrite value_of_equation *)
-  (*     end; *)
-  (*     repeat match goal with *)
-  (*            | [ H : value_of ?FUEL1 ?ENV ?EXP = _ |- match value_of ?FUEL2 ?ENV ?EXP with Some _ => _ | None => _ end = _ ] => *)
-  (*              apply fuel_order with (fuel' := FUEL2) in H; eauto; rewrite H *)
-  (*            | [ H : match value_of ?FUEL1 ?ENV ?EXP with Some _ => _ | None => _ end = _ |- match value_of ?FUEL2 ?ENV ?EXP with Some _ => _ | None => _ end = _ ] => *)
-  (*              destruct (value_of FUEL1 ENV EXP) eqn:T; try congruence; apply fuel_order with (fuel' := FUEL2) in T; eauto; rewrite T; clear T *)
-  (*            | [ |- context[match ?BEH with BehVal _ => _ | BehErr => _ end] ] => *)
-  (*              destruct BEH; try congruence *)
-  (*            | [ |- context[match ?VAL with ValNum _ => _ | ValBool _ => _ | ValClo _ _ _ => _ end] ] => *)
-  (*              destruct VAL; try congruence *)
-  (*            | [ |- context[if ?B then _ else _] ] => *)
-  (*              destruct B *)
-  (*            | [ H : abort _ |- _ ] => *)
-  (*              invert' H *)
-  (*            end; *)
-  (*     eauto. *)
-  (* Qed. *)
 
   Theorem value_of_completeness :
     forall env exp beh,
