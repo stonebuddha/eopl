@@ -394,7 +394,7 @@ Module TranslationImpl.
                            end
             end
           end);
-    simpl; omega.
+    simpl in *; omega.
   Defined.
 
   Function translation_of {fv : list var} (exp : P.expression fv) : L.expression (length fv) :=
@@ -553,18 +553,18 @@ Module TranslationImpl.
 
     exists (P.BehVal (P.ValNum (Z.of_nat n))).
     eauto.
-    
-    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env0 := env); eauto.
+
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; subst.
-    destruct IHvalue_of_rel2 with (tm' := L.TmDiff1 (translation_of_behavior x) (translation_of e2)) (tm := P.TmDiff1 x e2) (env0 := env); eauto.
+    destruct IHvalue_of_rel2 with (tm' := L.TmDiff1 (translation_of_behavior x) (translation_of e2)) (tm := P.TmDiff1 x e2) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; eauto.
 
     exists P.BehErr.
     eauto.
 
-    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env0 := env); eauto.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; subst.
-    destruct IHvalue_of_rel2 with (tm' := L.TmDiff2 (length fv) (translation_of_expval e0) (translation_of_behavior x)) (tm := P.TmDiff2 fv e0 x) (env0 := env); eauto.
+    destruct IHvalue_of_rel2 with (tm' := L.TmDiff2 (length fv) (translation_of_expval e0) (translation_of_behavior x)) (tm := P.TmDiff2 fv e0 x) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; eauto.
 
     exists P.BehErr.
@@ -585,9 +585,9 @@ Module TranslationImpl.
               end
       end.
 
-    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env0 := env); eauto.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; subst.
-    destruct IHvalue_of_rel2 with (tm' := L.TmIsZero1 (length fv) (translation_of_behavior x)) (tm := P.TmIsZero1 fv x) (env0 := env); eauto.
+    destruct IHvalue_of_rel2 with (tm' := L.TmIsZero1 (length fv) (translation_of_behavior x)) (tm := P.TmIsZero1 fv x) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; eauto.
 
     exists P.BehErr.
@@ -601,18 +601,18 @@ Module TranslationImpl.
     exists P.BehErr; intuition; constructor; intuition; invert' H0.
     exists P.BehErr; intuition; constructor; intuition; invert' H0.
 
-    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env0 := env); eauto.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; subst.
-    destruct IHvalue_of_rel2 with (tm' := L.TmIf1 (translation_of_behavior x) (translation_of e2) (translation_of e3)) (tm := P.TmIf1 x e2 e3) (env0 := env); eauto.
+    destruct IHvalue_of_rel2 with (tm' := L.TmIf1 (translation_of_behavior x) (translation_of e2) (translation_of e3)) (tm := P.TmIf1 x e2 e3) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; eauto.
 
     exists P.BehErr.
     eauto.
 
-    destruct IHvalue_of_rel with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env0 := env); eauto.
+    destruct IHvalue_of_rel with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; eauto.
 
-    destruct IHvalue_of_rel with (tm' := L.TmExp (translation_of e0)) (tm := P.TmExp e0) (env0 := env); eauto.
+    destruct IHvalue_of_rel with (tm' := L.TmExp (translation_of e0)) (tm := P.TmExp e0) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; eauto.
 
     destruct e1.
@@ -630,9 +630,9 @@ Module TranslationImpl.
     rewrite Heqs.
     reflexivity.
 
-    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env0 := env); eauto.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; subst.
-    destruct IHvalue_of_rel2 with (tm' := L.TmLet1 (translation_of_behavior x0) (translation_of e2)) (tm := P.TmLet1 x0 e2) (env0 := env); eauto.
+    destruct IHvalue_of_rel2 with (tm' := L.TmLet1 (translation_of_behavior x0) (translation_of e2)) (tm := P.TmLet1 x0 e2) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; eauto.
 
     exists P.BehErr.
@@ -644,17 +644,17 @@ Module TranslationImpl.
     exists (P.BehVal (P.ValClo e env)).
     eauto.
 
-    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env0 := env); eauto.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e1)) (tm := P.TmExp e1) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; subst.
-    destruct IHvalue_of_rel2 with (tm' := L.TmCall1 (translation_of_behavior x) (translation_of e2)) (tm := P.TmCall1 x e2) (env0 := env); eauto.
+    destruct IHvalue_of_rel2 with (tm' := L.TmCall1 (translation_of_behavior x) (translation_of e2)) (tm := P.TmCall1 x e2) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; eauto.
 
     exists P.BehErr.
     eauto.
 
-    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env0 := env); eauto.
+    destruct IHvalue_of_rel1 with (tm' := L.TmExp (translation_of e)) (tm := P.TmExp e) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; subst.
-    destruct IHvalue_of_rel2 with (tm' := L.TmCall2 (length fv) (translation_of_expval e0) (translation_of_behavior x)) (tm := P.TmCall2 fv e0 x) (env0 := env); eauto.
+    destruct IHvalue_of_rel2 with (tm' := L.TmCall2 (length fv) (translation_of_expval e0) (translation_of_behavior x)) (tm := P.TmCall2 fv e0 x) (env := env) (env' := translation_of_environment env); eauto.
     destruct H; eauto.
 
     exists P.BehErr.
